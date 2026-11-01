@@ -16,6 +16,9 @@ static const char *GH_REPO = "smells1k/plata-os";
 String   updMsg = "не проверял";
 uint16_t updCol = C_DIM;
 int      updPct = -1;
+int      updKb  = 0;
+
+String ghNotes = "";          /* что нового из релиза */
 
 static float verNum(const String &v) {
   String s = v;
@@ -75,6 +78,19 @@ bool otaCheck(bool quiet = false) {
   h.end();
 
   ghTag = jsonField(body, "tag_name");
+  ghNotes = "";                       /* что нового */
+  {
+    String bd = jsonField(body, "body");
+    int p = bd.indexOf("Что");
+    if (p < 0) p = bd.indexOf("НОВОЕ");
+    if (p >= 0) {
+      String line = bd.substring(p);
+      int nl = line.indexOf('\n');
+      if (nl > 0) line = line.substring(0, nl);
+      line.trim();
+      ghNotes = line;
+    }
+  }
 
   /* ищем ссылку на первый .bin в релизе */
   ghUrl = "";
@@ -106,16 +122,6 @@ bool otaCheck(bool quiet = false) {
     updCol = C_OK;
   }
   return true;
-}
-
-/* ── прогресс: перерисовываем только полосу ── */
-static void updBar() {
-  int w = SCR_W - 60;
-  tft.fillRect(30, 176, w, 26, C_BG);
-  tft.drawRect(30, 176, w, 24, C_LINE);
-  if (updPct > 0) tft.fillRect(32, 178, (w - 4) * updPct / 100, 20, C_ACC);
-  tft.fillRect(70, 206, 100, 22, C_BG);
-  textCenter(210, (String(updPct) + "%").c_str(), F_MD, C_TXT);
 }
 
 /* ══════════ ПРИЁМНИК ОБРАЗА ══════════ */
@@ -245,7 +251,8 @@ bool otaInstall() {
     if (!sink.feed(buf, n)) break;
 
     int p = sink.pct();
-    if (p != lastPct) { lastPct = p; updPct = p; updBar(); }
+    updKb = (int)(sink.writ / 1024);
+    if (p != lastPct) { lastPct = p; updPct = p; drawUpd(); }
   }
   h.end();
   if (stuck) {
@@ -259,7 +266,7 @@ bool otaInstall() {
 
   if ((sink.stop || sink.seen >= (uint32_t)len) && sink.writ > 0 && sink.finish()) {
     updPct = 100;
-    updBar();
+    drawUpd();
     updMsg = "готово, перезапускаюсь";
     updCol = C_OK;
     drawUpd();
@@ -281,32 +288,42 @@ bool otaInstall() {
 
 /* ── экран ── */
 void drawUpd() {
-  topBack("ОБНОВЛЕНИЕ", 18);
+  topBack("ОБНОВЛЕНИЕ", 16);
 
-  box(10, 48, SCR_W - 20, 32, C_PANEL, C_LINE, 6);
-  textDraw(18, 52, "У ТЕБЯ", F_SM, C_DIM);
-  textRight(SCR_W - 18, 52, OS_VER, F_MD, C_TXT);
+  /* ── две строки версий ── */
+  box(8, 52, SCR_W - 16, 26, C_PANEL, C_LINE, 5);
+  textDraw(14, 57, "у тебя", F_SM, C_DIM);
+  textRight(SCR_W - 14, 57, OS_VER, F_MD, C_TXT);
 
-  box(10, 84, SCR_W - 20, 32, C_PANEL, C_LINE, 6);
-  textDraw(18, 88, "НА GITHUB", F_SM, C_DIM);
-  textRight(SCR_W - 18, 88, ghTag.length() ? ghTag.c_str() : "—", F_MD,
+  box(8, 82, SCR_W - 16, 26, C_PANEL, C_LINE, 5);
+  textDraw(14, 87, "на GitHub", F_SM, C_DIM);
+  textRight(SCR_W - 14, 87, ghTag.length() ? ghTag.c_str() : "—", F_MD,
             ghTag.length() ? C_ACC : C_DIM);
 
-  textCenter(124, textClip(updMsg, SCR_W - 20, F_SM).c_str(), F_SM, updCol);
+  /* ── состояние: одна строка, всегда на своём месте ── */
+  tft.fillRect(0, 112, SCR_W, 24, C_BG);
+  textCenter(116, textClip(updMsg, SCR_W - 12, F_MD).c_str(), F_MD, updCol);
 
-  /* полоса прогресса */
-  int w = SCR_W - 60;
-  tft.drawRect(30, 148, w, 24, C_LINE);
-  if (updPct > 0) tft.fillRect(32, 150, (w - 4) * updPct / 100, 20, C_ACC);
-  if (updPct >= 0) textCenter(184, (String(updPct) + "%").c_str(), F_MD, C_TXT);
-  else textCenter(184, wifiOk ? "нужно только Wi-Fi" : "нужен Wi-Fi", F_SM, C_DIM);
+  /* ── подробность ── */
+  tft.fillRect(0, 138, SCR_W, 20, C_BG);
+  if (updPct >= 0)
+    textCenter(140, (String(updPct) + "%  ·  " + String(updKb) + " КБ").c_str(), F_SM, C_DIM);
+  else if (ghNotes.length())
+    textCenter(140, textClip(ghNotes, SCR_W - 12, F_SM).c_str(), F_SM, C_DIM);
+  else
+    textCenter(140, wifiOk ? "нужно только Wi-Fi" : "нужен Wi-Fi", F_SM, C_DIM);
 
-  /* прямая ссылка: видно, куда плата стучится */
-  textCenter(212, "плата качает с GitHub", F_SM, C_DIM);
-  textCenter(230, GH_REPO, F_SM, C_ACC);
+  /* ── полоса прогресса (своя зона, ничего не задевает) ── */
+  int w = SCR_W - 40;
+  tft.drawRect(20, 166, w, 18, C_LINE);
+  if (updPct > 0) tft.fillRect(22, 168, (w - 4) * updPct / 100, 14, C_ACC);
 
-  btnDraw(10, SCR_H - 68, SCR_W - 20, 30, "Проверить обновление", C_PANEL, C_TXT, F_SM);
-  btnDraw(10, SCR_H - 34, SCR_W - 20, 30, "Установить с GitHub", C_ACC, C_WHITE, F_SM);
+  /* ── куда стучимся ── */
+  textCenter(198, "плата качает с GitHub", F_SM, C_DIM);
+  textCenter(216, GH_REPO, F_SM, C_ACC);
+
+  btnDraw(8, SCR_H - 66, SCR_W - 16, 28, "ПРОВЕРИТЬ", C_PANEL, C_TXT, F_SM);
+  btnDraw(8, SCR_H - 34, SCR_W - 16, 28, "УСТАНОВИТЬ С GITHUB", C_ACC, C_WHITE, F_SM);
 }
 
 void updTouch(TouchPt t) {

@@ -30,7 +30,7 @@
 
 /* Версия и канал управления. Меняется при каждой пересборке —
    по ней сразу видно, прошита ли новая прошивка. */
-static const char *OS_VER = "13.0";
+static const char *OS_VER = "13.1";
 #if USE_USB_DISPLAY
 static const char *OS_CH = "USB";
 #else
@@ -282,8 +282,7 @@ static void cfgLoad() {
 void drawLauncher();  void launcherTouch(TouchPt);
 void drawUpd();       void updTouch(TouchPt);
 void drawShade();     void shadeTouch(TouchPt);
-void drawTimer();     void timerTouch(TouchPt);
-void drawStop();      void stopTouch(TouchPt);
+void drawCalibScreen(); void calTouch(TouchPt); void calibTick();
 void drawNote();      void noteTouch(TouchPt);
 void openShade();     void closeShade();
 bool otaCheck(bool quiet);  bool otaInstall();
@@ -317,8 +316,7 @@ Screen SCR_INFO   = { "инфо",    drawInfo,     infoTouch };
 Screen SCR_GAMES  = { "игры",    drawGames,    gamesTouch };
 Screen SCR_MORE   = { "доп",     drawMore,     moreTouch };
 Screen SCR_UPD    = { "обновл",  drawUpd,      updTouch };
-Screen SCR_TIMER  = { "таймер",  drawTimer,    timerTouch };
-Screen SCR_STOP   = { "секунды", drawStop,     stopTouch };
+Screen SCR_CAL    = { "калибр",  drawCalibScreen, calTouch };
 Screen SCR_NOTE   = { "заметка", drawNote,     noteTouch };
 Screen SCR_SHADE  = { "шторка",  drawShade,    shadeTouch };
 Screen SCR_TORCH  = { "фонарь",  drawTorch,    torchTouch };
@@ -346,6 +344,7 @@ void go(const Screen *s) {
   curScreen = s;
   tft.fillScreen(C_BG);    /* fillScreen сам открывает новый кадр */
   if (s && s->draw) s->draw();
+  statusDraw();            /* время и сеть — всегда сверху, на любом экране */
 }
 
 /* ══════════ ВРЕМЯ ══════════ */
@@ -406,12 +405,12 @@ static void statusDraw() {
 /* заголовок с кнопкой «назад» сверху — на всех внутренних экранах */
 static void topBack(const char *title, uint8_t px = 16) {
   statusDraw();
-  btnDraw(5, 25, 34, 21, "<", C_PANEL2, C_TXT, F_MD);
+  btnDraw(4, 24, 46, 24, "<", C_PANEL2, C_WHITE, F_MD);
   headline(45, 26, title, C_WHITE, px);
 }
 
 static bool topBackHit(TouchPt t) {
-  return t.y >= 24 && t.y <= 49 && t.x >= 4 && t.x <= 42;
+  return t.y >= 22 && t.y <= 50 && t.x >= 2 && t.x <= 52;
 }
 
 static void drawNavBack(const char *label = "НАЗАД", int y = SCR_H - 40) {
@@ -466,11 +465,10 @@ static void iconDraw(int kind, int cx, int cy, uint16_t col) {
       tft.fillRect(cx - 7, cy - 1, 14, 3, col);
       tft.fillRect(cx - 1, cy - 7, 3, 14, col);
       break;
-    case 7:                              /* таймер: песочные часы */
-      tft.drawFastHLine(cx - 8, cy - 11, 17, col);
-      tft.drawFastHLine(cx - 8, cy + 9, 17, col);
-      tft.drawLine(cx - 7, cy - 9, cx + 7, cy + 7, col);
-      tft.drawLine(cx + 7, cy - 9, cx - 7, cy + 7, col);
+    case 7:                              /* заметка: листок */
+      tft.drawRoundRect(cx - 9, cy - 11, 18, 22, 3, col);
+      for (int i = 0; i < 3; i++)
+        tft.fillRect(cx - 5, cy - 5 + i * 6, 10, 2, col);
       break;
   }
 }
@@ -486,8 +484,8 @@ void drawLauncher() {
   textRight(SCR_W - 8, 26, OS_VER, F_SM, C_DIM);
 #endif
 
-  const char *names[8] = { "Свет", "Часы", "ПК", "Игры", "Настр.", "Инфо", "Доп.", "Таймер" };
-  uint16_t acc[8] = { 0xFBE0, 0x2D7F, 0x3666, 0xC986, 0x6B4D, 0x8010, 0x4A69, 0x36E6 };
+  const char *names[8] = { "Свет", "Часы", "ПК", "Игры", "Настр.", "Инфо", "Доп.", "Заметка" };
+  uint16_t acc[8] = { 0xFBE0, 0x2D7F, 0x3666, 0xC986, 0x6B4D, 0x8010, 0x4A69, 0xFBE0 };
 
   for (int i = 0; i < 8; i++) {
     int col = i % 4, row = i / 4;
@@ -526,7 +524,7 @@ void launcherTouch(TouchPt t) {
   if (t.x - TL_X0 - col * (TL_W + TL_GX) > TL_W) return;
   if (t.y - TL_Y0 - row * (TL_H + TL_GY) > TL_H) return;
   const Screen *all[8] = { &SCR_LIGHT, &SCR_CLOCK, &SCR_PC, &SCR_GAMES,
-                           &SCR_SET, &SCR_INFO, &SCR_MORE, &SCR_TIMER };
+                           &SCR_SET, &SCR_INFO, &SCR_MORE, &SCR_NOTE };
   go(all[row * 4 + col]);
 }
 
@@ -618,7 +616,7 @@ static void weatherFetch();
 
 void drawClock() {
   statusDraw();
-  btnDraw(5, 25, 34, 21, "<", C_PANEL2, C_TXT, F_MD);
+  btnDraw(4, 24, 46, 24, "<", C_PANEL2, C_WHITE, F_MD);
   struct tm t;
   bool ok = nowTime(t);
   char hh[4] = "--", mm[4] = "--";
@@ -1177,11 +1175,10 @@ static void weatherFetch() {
 
 /* ══════════ ИНФО ══════════ */
 void drawInfo() {
-  statusDraw();
-  textDraw(10, 28, "О СИСТЕМЕ", F_MD, C_WHITE);
+  topBack("О СИСТЕМЕ", 16);
 
   struct Row { const char *k; String v; };
-  Row rows[11] = {
+  Row rows[9] = {
     { "Версия", OS_VER },
     { "Канал ПК", OS_CH },
     { "Чип", ESP.getChipModel() },
@@ -1191,56 +1188,97 @@ void drawInfo() {
     { "Темп.", String(temperatureRead(), 1) + " °C" },
     { "Сеть", wifiOk ? wSsid : "нет" },
     { "Адрес", wifiOk ? boardIp : "—" },
-    { "Сигнал", wifiOk ? String(rssiVal) + " dBm" : "—" },
-    { "Работаю", String(millis() / 60000) + " мин" },
   };
   int y = 54;
-  for (int i = 0; i < 11; i++) {
-    if (i % 2 == 0) tft.fillRect(8, y - 2, SCR_W - 16, 24, C_PANEL);
-    textDraw(14, y + 3, rows[i].k, F_SM, C_DIM);
-    textRight(SCR_W - 14, y + 3, textClip(rows[i].v, 130, F_SM).c_str(), F_SM, C_TXT);
-    y += 24;
+  for (int i = 0; i < 9; i++) {
+    if (i % 2 == 0) tft.fillRect(8, y - 2, SCR_W - 16, 26, C_PANEL);
+    textDraw(14, y + 4, rows[i].k, F_SM, C_DIM);
+    textRight(SCR_W - 14, y + 4, textClip(rows[i].v, 130, F_SM).c_str(), F_SM, C_TXT);
+    y += 26;
   }
+  btnDraw(10, SCR_H - 38, SCR_W - 20, 32, "НАЗАД", C_PANEL, C_TXT, F_SM);
 }
 
 void infoTouch(TouchPt t) {
-  if (t.y >= SCR_H - 36) go(&SCR_LAUNCH);
+  if (topBackHit(t)) { go(&SCR_LAUNCH); return; }
+  if (t.y >= SCR_H - 38) go(&SCR_LAUNCH);
 }
 
-/* ══════════ КАЛИБРОВКА ══════════ */
-void calibrate() {
-  tft.fillScreen(C_BG);
-  textCenter(140, "нажимай на кружки", F_MD, C_TXT);
-  textCenter(166, "по очереди", F_SM, C_DIM);
-  delay(900);
-  tft.fillScreen(C_BG);
+/* ══════════ КАЛИБРОВКА КАК ПРОГРАММА ══════════ */
+/* Открывается экраном, а не «провалом». Всегда можно выйти:
+   кнопка «‹» сверху, кнопка «ОТМЕНА» внизу и D4 в любой момент. */
 
-  const int pts[4][2] = { {20, 40}, {SCR_W - 20, 40}, {20, SCR_H - 20}, {SCR_W - 20, SCR_H - 20} };
-  int rawX[4], rawY[4];
-  for (int i = 0; i < 4; i++) {
-    tft.fillScreen(C_BG);
-    tft.drawCircle(pts[i][0], pts[i][1], 12, C_ACC);
-    tft.drawCircle(pts[i][0], pts[i][1], 6, C_ACC);
-    String cnt = String(i + 1) + " / 4";
-    textCenter(SCR_H / 2, cnt.c_str(), F_MD, C_DIM);
-    int16_t rx, ry;
-    uint32_t t0 = millis();
-    bool got = false;
-    while (millis() - t0 < 20000) {
-      if (touchRawRead(rx, ry)) { got = true; break; }
-      delay(10);
-    }
-    if (!got) { go(&SCR_SET); return; }
-    rawX[i] = rx; rawY[i] = ry;
-    while (touchRawRead(rx, ry)) delay(10);
-    delay(150);
+static int  calStep = -1;           /* -1 — экран-приглашение, 0..3 — точки */
+static int  calRawX[4], calRawY[4];
+static bool calBusy = false;
+
+void drawCalibScreen() {
+  topBack("КАЛИБРОВКА", 16);
+
+  if (calStep < 0) {
+    box(10, 52, SCR_W - 20, 120, C_PANEL, C_LINE, 8);
+    textDraw(20, 62, "Сенсор со временем", F_SM, C_TXT);
+    textDraw(20, 80, "съезжает: палец жмёт", F_SM, C_TXT);
+    textDraw(20, 98, "в одно, а срабатывает", F_SM, C_TXT);
+    textDraw(20, 116, "в другом месте.", F_SM, C_TXT);
+    textDraw(20, 144, "4 точки, по одной.", F_SM, C_DIM);
+
+    btnDraw(10, 190, SCR_W - 20, 36, "НАЧАТЬ", C_ACC, C_WHITE, F_MD);
+    btnDraw(10, 236, SCR_W - 20, 34, "ОТМЕНА", C_PANEL, C_TXT, F_SM);
+    textDraw(10, SCR_H - 22, "или зажми D4 на 5 сек — выключение", F_SM, C_DIM);
+    return;
   }
-  T_RAW_X0 = rawX[0]; T_RAW_X1 = rawX[1];
-  T_RAW_Y0 = rawY[0]; T_RAW_Y1 = rawY[3];
-  cfgSave();
-  tft.fillScreen(C_BG);
-  textCenter(140, "готово", F_MD, C_OK);
-  delay(800);
+
+  /* точка */
+  const int pts[4][2] = { {20, 46}, {SCR_W - 20, 46},
+                          {20, SCR_H - 46}, {SCR_W - 20, SCR_H - 46} };
+  int i = calStep;
+  tft.drawCircle(pts[i][0], pts[i][1], 13, C_ACC);
+  tft.drawCircle(pts[i][0], pts[i][1], 6, C_ACC);
+  textCenter(SCR_H / 2, (String("точка ") + (i + 1) + " из 4").c_str(), F_MD, C_TXT);
+  textCenter(SCR_H / 2 + 24, "нажми в центр кружка", F_SM, C_DIM);
+
+  btnDraw(10, SCR_H - 34, SCR_W - 20, 30, "ПРЕРВАТЬ", C_PANEL, C_TXT, F_SM);
+}
+
+void calibrate() {
+  calStep = -1;
+  go(&SCR_CAL);
+}
+
+/* вызывается из loop: если в режиме калибровки — ждём касания */
+void calibTick() {
+  if (calStep < 0) return;
+  int16_t rx, ry;
+  if (!touchRawRead(rx, ry)) return;
+
+  /* запомнили точку */
+  calRawX[calStep] = rx;
+  calRawY[calStep] = ry;
+  calStep++;
+
+  if (calStep > 3) {                 /* все четыре собраны */
+    T_RAW_X0 = calRawX[0]; T_RAW_X1 = calRawX[1];
+    T_RAW_Y0 = calRawY[0]; T_RAW_Y1 = calRawY[3];
+    cfgSave();
+    calStep = -1;
+    go(&SCR_CAL);
+    textCenter(SCR_H / 2, "ГОТОВО", F_MD, C_OK);
+    delay(900);
+    go(&SCR_SET);
+    return;
+  }
+  go(&SCR_CAL);
+}
+
+void calTouch(TouchPt t) {
+  if (topBackHit(t)) { calStep = -1; go(&SCR_SET); return; }
+  if (calStep < 0) {
+    if (t.y >= 190 && t.y < 226) { calStep = 0; go(&SCR_CAL); return; }
+    if (t.y >= 236 && t.y < 270) { go(&SCR_SET); return; }
+    return;
+  }
+  if (t.y >= SCR_H - 34) { calStep = -1; go(&SCR_SET); return; }   /* прервать */
 }
 
 /* ══════════ SETUP / LOOP ══════════ */
@@ -1371,6 +1409,28 @@ static void usbCommands() {
 
 void loop() {
   otaTick();
+
+  /* D4 зажата 5 секунд — погасить экран. Короткое нажатие возвращает. */
+  {
+    static uint32_t btnAt = 0;
+    static bool btnWas = false, scrOff = false;
+    bool down = (digitalRead(BTN_PIN) == LOW);
+    if (down && !btnWas) btnAt = millis();
+    if (down && millis() - btnAt > 5000 && !scrOff) {
+      blSet(1);
+      tft.fillScreen(C_BG);
+      scrOff = true;
+    }
+    if (down && scrOff && millis() - btnAt > 5400) {
+      blSet(blPwm);
+      scrOff = false;
+      btnAt = millis();
+      go(curScreen ? curScreen : &SCR_LAUNCH);
+    }
+    btnWas = down;
+  }
+
+  calibTick();             /* калибровка ждёт касаний */
 
   /* раз в 6 часов смотрим, не выложили ли новее */
   if (wifiOk && (updLast == 0 || millis() - updLast > 6UL * 3600UL * 1000UL)) {

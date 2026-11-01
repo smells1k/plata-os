@@ -18,7 +18,9 @@ static void bootSpiral(int step, uint16_t col) {
 }
 
 void bootScreen() {
-  tft.fillScreen(C_BG);
+  /* всё рисуем «партией»: окно на ПК не стирает фон под анимацией */
+  tft.beginBatch();
+  tft.fillRect(0, 0, SCR_W, SCR_H, C_BG);
 
   /* ── 1. спираль ── */
   for (int k = 6; k <= 36; k += 6) {
@@ -60,6 +62,7 @@ void bootScreen() {
   }
   textCenter(284, "готово", F_SM, C_OK);
   delay(220);
+  tft.endBatch();
 }
 
 /* заставка при выходе: экран гаснет волной */

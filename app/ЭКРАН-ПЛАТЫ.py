@@ -38,6 +38,7 @@ SYNC = 0xA5
 CLEAR, RECT, FRAME, RRECT, RFRAME = 0x01, 0x02, 0x03, 0x04, 0x05
 PIXEL, DISC, RING, HLINE, VLINE, RUN = 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B
 TEXT, BTEXT, SCROLL = 0x0C, 0x0D, 0x0E
+BATCH_ON, BATCH_OFF = 0x0F, 0x10
 
 # полная длина пакета, включая SYNC и номер кадра
 # полная длина пакета: SYNC(1) + опкод(1) + кадр(1) + данные
@@ -49,7 +50,7 @@ TEXT, BTEXT, SCROLL = 0x0C, 0x0D, 0x0E
 LEN = {
     CLEAR: 5, RECT: 13, FRAME: 13, RRECT: 15, RFRAME: 15,
     PIXEL: 9, DISC: 11, RING: 11, HLINE: 11, VLINE: 11, RUN: 11,
-    SCROLL: 5,
+    SCROLL: 5, BATCH_ON: 0, BATCH_OFF: 0,
 }
 
 FONT_PX = {0: 12, 1: 16, 2: 22}
@@ -209,6 +210,10 @@ class Port:
             if n is None:
                 del b[0]
                 continue
+            if n == 0:                     # партия: без данных, просто флаг
+                self.frames.put({"op": op, "frame": frame, "g": []})
+                del b[:3]
+                continue
             if len(b) < n:
                 return
             data = [b[i] | (b[i + 1] << 8) for i in range(3, n - 1, 2)]
@@ -349,6 +354,8 @@ class Screen(tk.Tk):
         self.board_h = SCR_H        # что сообщила плата
         self.max_y = SCR_H          # самый низ нарисованного
         self.scroll = 0
+        self.frozen = False
+        self.frozen_at = 0.0
         self.drawn = 0
         self.got_any = False
         self.touch_down = False
@@ -462,7 +469,16 @@ class Screen(tk.Tk):
                 break
             self.got_any = True            # любая команда = связь есть
             op = p["op"]
+            if op == BATCH_ON:
+                self.frozen = True
+                self.frozen_at = time.time()
+                continue
+            if op == BATCH_OFF:
+                self.frozen = False
+                continue
             if op == CLEAR:
+                if self.frozen:
+                    continue          # заставка идёт — фон не трогаем
                 cleared = True
                 self.pkts = []
                 self.done = 0
@@ -480,6 +496,8 @@ class Screen(tk.Tk):
 
         if n:
             self.drawn += n
+            if getattr(self, "frozen", False) and time.time() - getattr(self, "frozen_at", 0) > 3:
+                self.frozen = False        # партия оборвалась — не залипаем
             # высота содержимого: что сказала плата ИЛИ что реально нарисовано
             self.content_h = max(SCR_H, self.board_h, self.max_y + 6)
             s_reg = self.scroll
@@ -723,7 +741,7 @@ class Screen(tk.Tk):
         def X(v): return v * s
         def Y(v): return (v - sy) * s
 
-        if op in (CLEAR, SCROLL):
+        if op in (CLEAR, SCROLL, BATCH_ON, BATCH_OFF):
             return
 
         if op in (RECT, FRAME, RRECT, RFRAME):

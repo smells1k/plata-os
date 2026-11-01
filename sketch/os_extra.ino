@@ -80,7 +80,7 @@ void setTouch(TouchPt t) {
 }
 
 /* ══════════ ДОПОЛНИТЕЛЬНО (список с прокруткой) ══════════ */
-#define MORE_ITEMS 8
+#define MORE_ITEMS 6
 #define MORE_TOP   52
 #define MORE_STEP  30
 #define MORE_H     (SCR_H)   /* всё влезает, прокрутка не нужна */  /* + кнопка НАЗАД */
@@ -89,17 +89,15 @@ void drawMore() {
   topBack("ДОПОЛНИТЕЛЬНО", 14);
 
   const char *items[MORE_ITEMS] = {
-    "Таймер",
-    "Секундомер",
+    "Заметка",
     "Обновление по Wi-Fi",
     "Калибровка сенсора",
     "Перезагрузить",
     "Система",
     "Обновить время",
-    "Заметка",
   };
-  uint16_t acc[MORE_ITEMS] = { 0x36E6, 0x36E6, 0x2D7F, 0x6B4D,
-                               0xE8A4, 0x8010, 0x3666, 0xFBE0 };
+  uint16_t acc[MORE_ITEMS] = { 0xFBE0, 0x2D7F, 0x6B4D,
+                               0xE8A4, 0x8010, 0x3666 };
 
   for (int i = 0; i < MORE_ITEMS; i++) {
     int y = MORE_TOP + i * MORE_STEP;
@@ -116,13 +114,12 @@ void moreTouch(TouchPt t) {
   int i = (t.y - MORE_TOP) / MORE_STEP;
   if (i < 0 || i >= MORE_ITEMS) return;
   switch (i) {
-    case 0: go(&SCR_TIMER); break;
-    case 1: go(&SCR_STOP);  break;
-    case 2: go(&SCR_UPD);   break;
-    case 3: calibrate(); go(&SCR_SET); break;
-    case 4: go(&SCR_REBOOT); break;
-    case 5: go(&SCR_SYS);    break;
-    case 6: {
+    case 0: go(&SCR_NOTE); break;
+    case 1: go(&SCR_UPD);  break;
+    case 2: calibrate(); break;
+    case 3: go(&SCR_REBOOT); break;
+    case 4: go(&SCR_SYS);    break;
+    case 5: {
       String nt;
       if (wifiOk) {
         configTime(0, 0, "pool.ntp.org", "time.google.com");
@@ -136,7 +133,6 @@ void moreTouch(TouchPt t) {
       delay(1400);
       go(&SCR_MORE);
     } break;
-    case 7: go(&SCR_NOTE); break;
     default: go(&SCR_LAUNCH); break;
   }
 }

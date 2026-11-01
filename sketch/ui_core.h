@@ -79,6 +79,10 @@ public:
   /* следующий fillScreen начнёт новый кадр — иначе очистка уезжает в старый
      и окно на ПК не может отличить её от мусора */
   static void frameAfterClear() { frame++; }
+  /* партия: всё, что нарисовано между BEGIN и END, окно не стирает */
+  void beginBatch() { op(0x0F); }      /* 0x0F — начало партии */
+  void endBatch()   { op(0x10); }      /* 0x10 — конец */
+
   static void op(uint8_t code) { Serial.write(0xA5); Serial.write(code); Serial.write(frame); }
   static void u16(uint16_t v) { Serial.write(v & 0xFF); Serial.write(v >> 8); }
   static void hdr(uint8_t code, int x, int y, int w, int h, uint16_t c) {
