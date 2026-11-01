@@ -136,8 +136,8 @@ struct OtaSink {
   bool     stop  = false;
 
   bool begin(uint32_t totalBytes) {
-    total = totalBytes;
-    skip  = (totalBytes > 0x180000UL) ? 0x10000UL : 0;
+    skip = 0; total = totalBytes; seen = 0; writ = 0; stop = false;
+    skip = 0x10000UL;                    /* загрузчик и разметка уже в плате */
     return Update.begin(UPDATE_SIZE_UNKNOWN);
   }
 
@@ -171,6 +171,8 @@ struct OtaSink {
 };
 
 /* ── установка ── */
+/* GitHub иногда отдаёт файл кусками без указания размера.
+   Тогда читаем до закрытия соединения — главное, чтобы байты шли. */
 bool otaInstall() {
   if (!ghUrl.length()) {
     if (!otaCheck()) { drawUpd(); return false; }
@@ -184,15 +186,16 @@ bool otaInstall() {
 
   updMsg = "скачиваю…";
   updCol = C_ACC;
-  updPct = 0;
+  updPct = -1;
+  updKb = 0;
   drawUpd();
 
   WiFiClientSecure c;
   c.setInsecure();
   HTTPClient h;
   h.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-  h.setTimeout(15000);
-  h.setConnectTimeout(8000);
+  h.setTimeout(20000);
+  h.setConnectTimeout(10000);
   if (!h.begin(c, ghUrl)) {
     updMsg = "не открыть файл";
     updCol = C_ERR;
@@ -200,25 +203,20 @@ bool otaInstall() {
     return false;
   }
   h.addHeader("User-Agent", "plata-os");
+  h.addHeader("Accept", "*/*");
   int code = h.GET();
   if (code != 200) {
     h.end();
-    updMsg = "файл: код " + String(code);
-    updCol = C_ERR;
-    drawUpd();
-    return false;
-  }
-  int len = h.getSize();
-  if (len <= 0) {
-    h.end();
-    updMsg = "не знаю размер файла";
+    updMsg = "GitHub: код " + String(code);
     updCol = C_ERR;
     drawUpd();
     return false;
   }
 
+  int len = h.getSize();                 /* может быть -1: файл отдают кусками */
+
   static OtaSink sink;
-  if (!sink.begin((uint32_t)len)) {
+  if (!sink.begin(len > 0 ? (uint32_t)len : 4194304UL)) {
     h.end();
     updMsg = "не влезает в память";
     updCol = C_ERR;
@@ -228,45 +226,47 @@ bool otaInstall() {
 
   WiFiClient *st = h.getStreamPtr();
   uint8_t buf[1024];
-  int lastPct = -1;
+  uint32_t limit = (len > 0) ? (uint32_t)len : 4194304UL;
+  int lastShown = -1;
   uint32_t t0 = millis();
-  int stuck = 0;
+  bool stuck = false;
 
-  while (sink.seen < (uint32_t)len && !sink.stop) {
+  while (sink.seen < limit && !sink.stop) {
     size_t avail = st->available();
     if (avail == 0) {
-      if (!h.connected()) break;             /* соединение закрыто */
-      if (millis() - t0 > 15000) { stuck = 1; break; }
+      if (!h.connected() && st->available() == 0) break;   /* всё пришло */
+      if (millis() - t0 > 20000) { stuck = true; break; }
       delay(1);
       continue;
     }
     size_t want = avail;
     if (want > sizeof(buf)) want = sizeof(buf);
-    size_t left = (size_t)len - sink.seen;
-    if (want > left) want = left;
+    if (sink.seen + want > limit) want = limit - sink.seen;
 
     size_t n = st->read(buf, want);
-    if (n == 0) { if (millis() - t0 > 15000) { stuck = 1; break; } delay(1); continue; }
+    if (n == 0) { if (millis() - t0 > 20000) { stuck = true; break; } delay(1); continue; }
     t0 = millis();
     if (!sink.feed(buf, n)) break;
 
-    int p = sink.pct();
+    /* экран обновляем редко — иначе не успеваем читать сеть */
     updKb = (int)(sink.writ / 1024);
-    if (p != lastPct) { lastPct = p; updPct = p; drawUpd(); }
+    int p = (len > 0) ? sink.pct() : -1;
+    int show = (len > 0) ? (p / 3) * 3 : updKb / 40;
+    if (show != lastShown) { lastShown = show; updPct = p; drawUpd(); }
   }
   h.end();
+
   if (stuck) {
     Update.abort();
-    updMsg = "связь подвисла — жми ещё раз";
+    updMsg = "связь подвисла на " + String(updKb) + " КБ";
     updCol = C_ERR;
     updPct = -1;
     drawUpd();
     return false;
   }
 
-  if ((sink.stop || sink.seen >= (uint32_t)len) && sink.writ > 0 && sink.finish()) {
+  if (sink.writ > 0 && sink.finish()) {
     updPct = 100;
-    drawUpd();
     updMsg = "готово, перезапускаюсь";
     updCol = C_OK;
     drawUpd();
@@ -275,11 +275,7 @@ bool otaInstall() {
   }
 
   Update.abort();
-  {
-    int got = (int)(sink.writ / 1024);
-    int all = (int)(sink.appLen() / 1024);
-    updMsg = "оборвалось: " + String(got) + " из " + String(all) + " КБ";
-  }
+  updMsg = "записалось " + String(updKb) + " КБ — не хватило места";
   updCol = C_ERR;
   updPct = -1;
   drawUpd();
@@ -308,6 +304,8 @@ void drawUpd() {
   tft.fillRect(0, 138, SCR_W, 20, C_BG);
   if (updPct >= 0)
     textCenter(140, (String(updPct) + "%  ·  " + String(updKb) + " КБ").c_str(), F_SM, C_DIM);
+  else if (updKb > 0)
+    textCenter(140, (String(updKb) + " КБ принято").c_str(), F_SM, C_DIM);
   else if (ghNotes.length())
     textCenter(140, textClip(ghNotes, SCR_W - 12, F_SM).c_str(), F_SM, C_DIM);
   else
