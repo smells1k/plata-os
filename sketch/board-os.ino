@@ -30,7 +30,7 @@
 
 /* Версия и канал управления. Меняется при каждой пересборке —
    по ней сразу видно, прошита ли новая прошивка. */
-static const char *OS_VER = "13.7";
+static const char *OS_VER = "13.8";
 #if USE_USB_DISPLAY
 static const char *OS_CH = "USB";
 #else
@@ -97,6 +97,10 @@ void navLauncher();          /* вернуться на рабочий стол 
 /* Принимаем тот же самый ПЛАТА-ОС.bin, что и кабелем:
    если файл 4 МБ — первые 0x10000 (загрузчик + разметка) пропускаем,
    в раздел приложения пишем только программу. */
+
+static bool pcCmd(const char *cmd, String *out = nullptr);
+static inline void pcDo(const char *cmd) { pcCmd(cmd, nullptr); }
+void sendWol();
 
 #if HAVE_OTA
 static WebServer  otaSrv(80);
@@ -189,6 +193,52 @@ void otaStart() {
         Update.end(false);
       }
     });
+
+  /* ── пульт для телефона: открывается страница самой платы ── */
+  otaSrv.on("/pult", HTTP_GET, []() {
+    String h = "<!doctype html><meta charset=utf-8>";
+    h += "<meta name=viewport content='width=device-width,initial-scale=1'>";
+    h += "<title>ПЛАТА-ОС</title>";
+    h += "<style>body{margin:0;background:#0d1117;color:#e6edf3;"
+         "font:15px system-ui,sans-serif;padding:14px;max-width:520px;margin:0 auto}"
+         "h1{font-size:17px;margin:0 0 4px}.v{color:#8b949e;font-size:12px;margin-bottom:14px}"
+         ".g{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}"
+         "a{display:block;padding:15px;border-radius:10px;background:#161b22;"
+         "border:1px solid #30363d;color:#e6edf3;text-decoration:none;"
+         "text-align:center;font-weight:600;font-size:13px}"
+         "a:active{background:#30363d}.r{background:#2d1215;border-color:#8b2c33;color:#ffb3b8}"
+         "</style>";
+    h += "<h1>ПЛАТА-ОС</h1><div class=v>" + String(OS_VER) + " · " +
+         (wifiOk ? boardIp : String("нет сети")) + "</div>";
+    h += "<div class=g><a href='/p/on'>Разбудить ПК</a><a href='/p/lock'>Блокировка</a>"
+         "<a href='/p/sleep'>Сон</a><a href='/p/shutdown' class=r>Выключить</a>"
+         "<a href='/p/reboot' class=r>Перезагрузить</a><a href='/p/mute'>Без звука</a>"
+         "<a href='/p/vol_down'>Тише</a><a href='/p/vol_up'>Громче</a></div>";
+    h += "<div class=g><a href='/p/led'>Диод вкл/выкл</a><a href='/p/screen'>Экран вкл/выкл</a></div>";
+    h += "<p style='color:#8b949e;font-size:12px'>Домашняя сеть. Ничего наружу не открыто.</p>";
+    otaSrv.send(200, "text/html; charset=utf-8", h);
+  });
+
+  otaSrv.on("/p/on", HTTP_GET, []() { sendWol(); otaSrv.send(200, "text/plain; charset=utf-8", "пакет ушёл"); });
+  otaSrv.on("/p/lock", HTTP_GET, []() { pcDo("lock"); otaSrv.send(200, "text/plain; charset=utf-8", "блокирую"); });
+  otaSrv.on("/p/sleep", HTTP_GET, []() { pcDo("sleep"); otaSrv.send(200, "text/plain; charset=utf-8", "в сон"); });
+  otaSrv.on("/p/shutdown", HTTP_GET, []() { pcDo("shutdown"); otaSrv.send(200, "text/plain; charset=utf-8", "выключаю"); });
+  otaSrv.on("/p/reboot", HTTP_GET, []() { pcDo("reboot"); otaSrv.send(200, "text/plain; charset=utf-8", "перезагружаю"); });
+  otaSrv.on("/p/mute", HTTP_GET, []() { pcDo("mute"); otaSrv.send(200, "text/plain; charset=utf-8", "звук"); });
+  otaSrv.on("/p/vol_up", HTTP_GET, []() { pcDo("vol_up"); otaSrv.send(200, "text/plain; charset=utf-8", "громче"); });
+  otaSrv.on("/p/vol_down", HTTP_GET, []() { pcDo("vol_down"); otaSrv.send(200, "text/plain; charset=utf-8", "тише"); });
+  otaSrv.on("/p/led", HTTP_GET, []() {
+    ledLit = !ledLit;
+    if (ledLit) ledApply(); else neopixelWrite(RGB_PIN, 0, 0, 0);
+    cfgSave();
+    otaSrv.send(200, "text/plain; charset=utf-8", ledLit ? "диод включён" : "диод выключен");
+  });
+  otaSrv.on("/p/screen", HTTP_GET, []() {
+    static bool off = false;
+    off = !off;
+    if (off) { blSet(1); } else { blSet(blPwm); }
+    otaSrv.send(200, "text/plain; charset=utf-8", off ? "экран погашен" : "экран включён");
+  });
 
   otaSrv.begin();
 }
@@ -730,7 +780,7 @@ static bool sameSubnet() {
   return a[0] == b[0] && a[1] == b[1] && a[2] == b[2];
 }
 
-static bool pcCmd(const char *cmd, String *out = nullptr) {
+static bool pcCmd(const char *cmd, String *out) {
 #if USE_USB_DISPLAY
   /* по проводу — основной путь, Wi-Fi не нужен */
   pcCmdUsb(cmd);
@@ -882,9 +932,9 @@ void pcTouch(TouchPt t) {
   /* ── громкость: − + мут ── */
   if (t.y >= 122 && t.y < 152) {
     int i = (t.x - 8) / 78;
-    if (i == 0) { pcVol = max(0, pcVol - 5);   pcCmd("vol_down"); }
-    else if (i == 1) { pcVol = min(100, pcVol + 5); pcCmd("vol_up"); }
-    else if (i == 2) { pcMuted = !pcMuted;      pcCmd("mute"); }
+    if (i == 0) { pcVol = max(0, pcVol - 5);   pcDo("vol_down"); }
+    else if (i == 1) { pcVol = min(100, pcVol + 5); pcDo("vol_up"); }
+    else if (i == 2) { pcMuted = !pcMuted;      pcDo("mute"); }
     go(&SCR_PC);
     return;
   }
@@ -938,14 +988,19 @@ static bool parseMac(const String &s, uint8_t mac[6]) {
   return true;
 }
 
+void sendWol();
+
 void sendWol() {
-#if USE_USB_DISPLAY
-  /* по проводу: окно на ПК отправит пакет в свою сеть — Wi-Fi не нужен */
-  pcCmdUsb((String("wol ") + pcMac).c_str());
-  return;
-#else
+  /* ПК выключен — значит окна на нём нет, и по проводу просить некого.
+     Пакет шлёт сама плата по Wi-Fi. Провод — только запасной путь. */
   uint8_t mac[6];
-  if (!parseMac(pcMac, mac)) return;
+  if (!parseMac(pcMac, mac)) {
+#if USE_USB_DISPLAY
+    pcCmdUsb((String("wol ") + pcMac).c_str());
+#endif
+    return;
+  }
+  if (wifiOk) {
   uint8_t pkt[102];
   memset(pkt, 0xFF, 6);
   for (int i = 0; i < 16; i++) memcpy(pkt + 6 + i * 6, mac, 6);
@@ -960,6 +1015,10 @@ void sendWol() {
     delay(40);
   }
   udp.stop();
+    return;
+  }
+#if USE_USB_DISPLAY
+  pcCmdUsb((String("wol ") + pcMac).c_str());
 #endif
 }
 
