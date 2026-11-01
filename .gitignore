@@ -1,0 +1,13 @@
+# сборка Arduino
+build/
+*.elf
+*.map
+.arduino15/
+
+# питон
+__pycache__/
+*.pyc
+
+# мусор
+.DS_Store
+*~
