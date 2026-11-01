@@ -44,17 +44,14 @@ void drawSet() {
            F_SM, pcMac.length() ? C_TXT : C_WARN);
   g_setMacY = y; y += 40;
 
-  btnDraw(10, y, SCR_W - 20, 28, "Дополнительно  ›", C_PANEL, C_TXT, F_SM);
-  g_setMoreY = y; y += 32;
-
-  g_setBackY = y + 30;      /* нижней кнопки больше нет — назад сверху */
+  g_setMoreY = -100;                 /* «Дополнительно» теперь плиткой на столе */
+  g_setBackY = -100;                 /* нижней кнопки нет — назад сверху «‹» */
 
   g_setIpY = g_setPortY = -100;     /* по кабелю не нужны */
 }
 
 void setTouch(TouchPt t) {
   if (topBackHit(t)) { go(&SCR_LAUNCH); return; }
-  if (t.y >= g_setMoreY && t.y < g_setMoreY + 28) { go(&SCR_MORE); return; }
   if (t.y >= g_setScanY && t.y < g_setScanY + 28) { wifiDialog(); return; }
   if (t.y >= g_setBlY && t.y < g_setBlY + 36) {
     blSet(constrain(map(t.x, 10, SCR_W - 10, 10, 255), 10, 255));

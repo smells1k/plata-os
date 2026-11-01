@@ -30,7 +30,7 @@
 
 /* Версия и канал управления. Меняется при каждой пересборке —
    по ней сразу видно, прошита ли новая прошивка. */
-static const char *OS_VER = "12.3";
+static const char *OS_VER = "12.4";
 #if USE_USB_DISPLAY
 static const char *OS_CH = "USB";
 #else
@@ -485,7 +485,7 @@ void drawLauncher() {
   textRight(SCR_W - 8, 26, OS_VER, F_SM, C_DIM);
 #endif
 
-  const char *names[8] = { "Свет", "Часы", "ПК", "Игры", "Настр.", "Инфо", "Ещё", "Таймер" };
+  const char *names[8] = { "Свет", "Часы", "ПК", "Игры", "Настр.", "Инфо", "Доп.", "Таймер" };
   uint16_t acc[8] = { 0xFBE0, 0x2D7F, 0x3666, 0xC986, 0x6B4D, 0x8010, 0x4A69, 0x36E6 };
 
   for (int i = 0; i < 8; i++) {

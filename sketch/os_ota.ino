@@ -159,6 +159,7 @@ struct OtaSink {
   }
 
   int pct() const { return total ? (int)((uint64_t)seen * 100 / total) : 0; }
+  uint32_t appLen() const { return total > skip ? total - skip : total; }
 
   bool finish() { return Update.end(true); }   /* размер = сколько записали */
 };
@@ -223,17 +224,23 @@ bool otaInstall() {
   uint8_t buf[1024];
   int lastPct = -1;
   uint32_t t0 = millis();
+  int stuck = 0;
 
   while (sink.seen < (uint32_t)len && !sink.stop) {
-    size_t want = (size_t)len - sink.seen;
-    if (want > sizeof(buf)) want = sizeof(buf);
-    size_t n = st->read(buf, want);
-    if (n == 0) {
-      if (!h.connected() && st->available() == 0) break;
-      if (millis() - t0 > 20000) break;      /* зависло — выходим */
-      delay(2);
+    size_t avail = st->available();
+    if (avail == 0) {
+      if (!h.connected()) break;             /* соединение закрыто */
+      if (millis() - t0 > 15000) { stuck = 1; break; }
+      delay(1);
       continue;
     }
+    size_t want = avail;
+    if (want > sizeof(buf)) want = sizeof(buf);
+    size_t left = (size_t)len - sink.seen;
+    if (want > left) want = left;
+
+    size_t n = st->read(buf, want);
+    if (n == 0) { if (millis() - t0 > 15000) { stuck = 1; break; } delay(1); continue; }
     t0 = millis();
     if (!sink.feed(buf, n)) break;
 
@@ -241,6 +248,14 @@ bool otaInstall() {
     if (p != lastPct) { lastPct = p; updPct = p; updBar(); }
   }
   h.end();
+  if (stuck) {
+    Update.abort();
+    updMsg = "связь подвисла — жми ещё раз";
+    updCol = C_ERR;
+    updPct = -1;
+    drawUpd();
+    return false;
+  }
 
   if ((sink.stop || sink.seen >= (uint32_t)len) && sink.writ > 0 && sink.finish()) {
     updPct = 100;
@@ -253,7 +268,11 @@ bool otaInstall() {
   }
 
   Update.abort();
-  updMsg = "оборвалось на " + String(sink.writ / 1024) + " КБ";
+  {
+    int got = (int)(sink.writ / 1024);
+    int all = (int)(sink.appLen() / 1024);
+    updMsg = "оборвалось: " + String(got) + " из " + String(all) + " КБ";
+  }
   updCol = C_ERR;
   updPct = -1;
   drawUpd();
@@ -279,9 +298,8 @@ void drawUpd() {
   int w = SCR_W - 60;
   tft.drawRect(30, 148, w, 24, C_LINE);
   if (updPct > 0) tft.fillRect(32, 150, (w - 4) * updPct / 100, 20, C_ACC);
-  if (updPct >= 0) textCenter(182, (String(updPct) + "%").c_str(), F_MD, C_TXT);
-  else textCenter(180, wifiOk ? "один файл — и для кабеля, и для воздуха"
-                              : "нужен Wi-Fi", F_SM, C_DIM);
+  if (updPct >= 0) textCenter(184, (String(updPct) + "%").c_str(), F_MD, C_TXT);
+  else textCenter(184, wifiOk ? "нужно только Wi-Fi" : "нужен Wi-Fi", F_SM, C_DIM);
 
   /* прямая ссылка: видно, куда плата стучится */
   textCenter(212, "плата качает с GitHub", F_SM, C_DIM);
