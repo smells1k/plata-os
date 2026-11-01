@@ -33,10 +33,10 @@ jobs:
 
       - name: Собрать
         run: |
-          arduino-cli compile \
-            -b esp32:esp32:esp32 \
-            --output-dir out \
-            sketch/
+          # arduino-cli требует, чтобы папка называлась как скетч
+          mkdir -p tmp/board-os
+          cp sketch/*.ino sketch/*.h tmp/board-os/
+          arduino-cli compile -b esp32:esp32:esp32 --output-dir out tmp/board-os
 
       - name: Проверить, что влезло
         run: |
