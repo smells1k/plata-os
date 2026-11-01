@@ -31,7 +31,7 @@ SCR_W, SCR_H = 240, 320
 BAUD = 460800
 import platform
 IS_WIN = platform.system() == "Windows"
-VERSION = "4.0"
+VERSION = "4.1"
 SYNC = 0xA5
 
 # ── опкоды ─────────────────────────────────────────────────
