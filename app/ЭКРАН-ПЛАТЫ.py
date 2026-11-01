@@ -31,7 +31,7 @@ SCR_W, SCR_H = 240, 320
 BAUD = 460800
 import platform
 IS_WIN = platform.system() == "Windows"
-VERSION = "4.3"
+VERSION = "4.4"
 SYNC = 0xA5
 
 # ── опкоды ─────────────────────────────────────────────────
@@ -443,8 +443,12 @@ class Screen(tk.Tk):
             y = min(max(int(e.y / self.scale) + self.scroll, 0), 8000)
             # если палец уехал — сообщаем конечную точку ДО отпускания,
             # чтобы плата увидела жест, а не просто тап
-            if abs(y - getattr(self, "drag_y0", y)) > 12:
-                self.port.send(b"\x54" + x.to_bytes(2, "little") + y.to_bytes(2, "little"))
+            y0 = getattr(self, "drag_y0", y)
+            if abs(y - y0) > 12:
+                # две точки: середина и конец — плата точно увидит направление
+                ym = (y0 + y) // 2
+                for yy in (ym, y):
+                    self.port.send(b"\x54" + x.to_bytes(2, "little") + yy.to_bytes(2, "little"))
             self.port.send(b"\x52")
             self.touch_down = False
 

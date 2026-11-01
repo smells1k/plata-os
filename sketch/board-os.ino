@@ -30,7 +30,7 @@
 
 /* Версия и канал управления. Меняется при каждой пересборке —
    по ней сразу видно, прошита ли новая прошивка. */
-static const char *OS_VER = "13.6";
+static const char *OS_VER = "13.7";
 #if USE_USB_DISPLAY
 static const char *OS_CH = "USB";
 #else
@@ -1411,19 +1411,38 @@ static void usbCommands() {
         tft.fillScreen(C_BG);      /* кадр открывается внутри */
         curScreen->draw();
       }
-    } else if (c == 0x54) {               /* касание: x2 y2 */
+    } else if (c == 0x54) {               /* точка касания: x2 y2 */
       uint8_t b[4]; int n = 0;
       uint32_t t0 = millis();
       while (n < 4 && millis() - t0 < 80) {
         if (Serial.available()) b[n++] = Serial.read();
       }
-      if (n == 4) {
-        TouchPt t;
-        t.x = b[0] | (b[1] << 8);
-        t.y = b[2] | (b[3] << 8);
-        t.ok = true;
-        if (curScreen && curScreen->touch) curScreen->touch(t);
+      if (n != 4) continue;
+      TouchPt t;
+      t.x = b[0] | (b[1] << 8);
+      t.y = b[2] | (b[3] << 8);
+      t.ok = true;
+
+      /* откуда началось движение — чтобы отличить свайп от нажатия */
+      static int  prevY = -1, startY = -1;
+      static uint32_t prevAt = 0;
+
+      if (prevY >= 0 && millis() - prevAt < 900 && abs(t.y - prevY) > 24) {
+        int from = (startY >= 0) ? startY : prevY;
+        prevY = -1; startY = -1;
+        if (t.y > from) { if (!shadeOpen) openShade(); }     /* вниз — открыть */
+        else            { if (shadeOpen) closeShade(); }      /* вверх — закрыть */
+        continue;
       }
+
+      /* повторная точка почти на месте — это продолжение того же нажатия */
+      if (prevY < 0 || millis() - prevAt > 900 || abs(t.y - prevY) > 12) startY = t.y;
+      prevY = t.y; prevAt = millis();
+
+      /* кнопка быстрых настроек в правом верхнем углу */
+      if (!shadeOpen && shadeHandleHit(t)) { openShade(); continue; }
+
+      if (curScreen && curScreen->touch) curScreen->touch(t);
     }
   }
 }
@@ -1502,9 +1521,6 @@ void loop() {
       statusDraw();
     }
   }
-
-  /* свайп: окно на ПК присылает нажатие и отпускание по отдельности */
-  if (swipeDone()) return;
 
   TouchPt t = touchGet();
   /* ручка в правом верхнем углу — открыть быстрые настройки с любого экрана */
