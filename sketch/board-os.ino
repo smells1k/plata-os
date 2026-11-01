@@ -30,7 +30,7 @@
 
 /* Версия и канал управления. Меняется при каждой пересборке —
    по ней сразу видно, прошита ли новая прошивка. */
-static const char *OS_VER = "13.1";
+static const char *OS_VER = "13.2";
 #if USE_USB_DISPLAY
 static const char *OS_CH = "USB";
 #else
@@ -75,7 +75,8 @@ String   city = "Хабаровск";
 String   boardIp = "";
 bool     wifiOk = false;
 bool     shadeOpen = false;
-int      lightBarY[3] = { 157, 191, 225 };   /* где ползунки R/G/B */
+int      lightBarY[3] = { 153, 185, 217 };   /* где ползунки R/G/B */
+int      lightBarBri  = 262;                 /* где ползунок яркости */
 int      shadeY[2] = { 0, 0 };     /* где нарисованы ползунки */
 bool     updNew = false;           /* на GitHub лежит версия новее */
 String   updTag = "";              /* какая именно */
@@ -549,7 +550,7 @@ void drawLight() {
   const char *nm[3] = { "К", "З", "С" };
   uint8_t val[3] = { ledR, ledG, ledB };
   for (int i = 0; i < 3; i++) {
-    int y = 142 + i * 34;
+    int y = 138 + i * 32;
     /* цвет канала — без примесей, чтобы не путаться */
     uint16_t chCol = (i == 0) ? rgb565(val[i], 0, 0)
                    : (i == 1) ? rgb565(0, val[i], 0)
@@ -560,14 +561,19 @@ void drawLight() {
     lightBarY[i] = y + 15;
   }
 
+  /* ── яркость самого диода ── */
+  textDraw(10, 244, "ЯРКОСТЬ ДИОДА", F_SM, C_DIM);
+  textRight(SCR_W - 10, 244, String(ledBri).c_str(), F_SM, C_TXT);
+  barDraw(10, 262, SCR_W - 20, 14, (int)ledBri * 100 / 255, C_WARN);
+  lightBarBri = 262;
+
   /* ── эффекты ── */
-  textDraw(10, 244, "ЭФФЕКТЫ", F_SM, C_DIM);
   const char *fx[4] = { "Радуга", "Дыхан.", "Строб", "Свеча" };
   for (int i = 0; i < 4; i++)
-    btnDraw(10 + i * 56, 262, 52, 26, fx[i],
+    btnDraw(10 + i * 56, 284, 52, 24, fx[i],
             ledMode == i + 1 ? C_ACC : C_PANEL, C_TXT, F_SM);
 
-  btnDraw(10, SCR_H - 30, SCR_W - 20, 28, ledLit ? "ВЫКЛЮЧИТЬ ДИОД" : "ВКЛЮЧИТЬ ДИОД",
+  btnDraw(10, SCR_H - 26, SCR_W - 20, 24, ledLit ? "ВЫКЛЮЧИТЬ" : "ВКЛЮЧИТЬ",
           ledLit ? C_ERR : C_OK, C_WHITE, F_SM);
 }
 
@@ -575,7 +581,7 @@ void lightTouch(TouchPt t) {
   if (topBackHit(t)) { go(&SCR_LAUNCH); return; }
 
   /* включить/выключить */
-  if (t.y >= SCR_H - 30) {
+  if (t.y >= SCR_H - 26) {
     ledLit = !ledLit;
     if (!ledLit) { ledMode = 0; neopixelWrite(RGB_PIN, 0, 0, 0); }
     else ledApply();
@@ -598,8 +604,18 @@ void lightTouch(TouchPt t) {
     }
   }
 
+  /* яркость диода */
+  if (t.y >= lightBarBri - 4 && t.y < lightBarBri + 18) {
+    ledBri = constrain(map(t.x, 10, SCR_W - 10, 1, 255), 1, 255);
+    ledLit = true;
+    ledApply();
+    cfgSave();
+    go(&SCR_LIGHT);
+    return;
+  }
+
   /* эффекты */
-  if (t.y >= 262 && t.y < 290) {
+  if (t.y >= 284 && t.y < 310) {
     int i = (t.x - 10) / 56;
     if (i < 0 || i > 3) return;
     ledMode = (ledMode == i + 1) ? 0 : i + 1;
@@ -1483,26 +1499,33 @@ void loop() {
 
   TouchPt t = touchGet();
   if (t.ok && !shadeOpen) {
-    /* ручка справа — открыть сразу */
+    /* ручка справа в статусной строке — открыть сразу */
     if (t.y <= STATUS_H && t.x >= SCR_W - 40) {
       openShade();
       while (touchGet().ok) delay(5);
       return;
     }
-    /* свайп сверху вниз — как на телефоне */
-    if (t.y <= STATUS_H + 18) {
-      int y0 = t.y, yMax = y0;
-      uint32_t t0 = millis();
-      while (touchGet().ok && millis() - t0 < 1500) {
-        TouchPt d = touchGet();
-        if (d.ok && d.y > yMax) yMax = d.y;
-        delay(5);
-      }
-      if (yMax - y0 > 45) {          /* потянул вниз — открываем */
-        openShade();
+    /* жест: следим за пальцем до отпускания */
+    int y0 = t.y, yMax = t.y, yMin = t.y;
+    uint32_t t0 = millis();
+    while (millis() - t0 < 1200) {
+      TouchPt d = touchGet();
+      if (!d.ok) break;
+      if (d.y > yMax) yMax = d.y;
+      if (d.y < yMin) yMin = d.y;
+      delay(5);
+    }
+    int dist = yMax - yMin;
+    if (dist > 35) {
+      if (yMax > y0 + 30) { openShade(); return; }      /* вниз — открыть */
+      if (y0 > yMin + 30) {                             /* вверх — закрыть/игнор */
+        if (shadeOpen) { closeShade(); return; }
         return;
       }
     }
+    /* это был обычный тап — отдаём экрану */
+    if (curScreen && curScreen->touch) curScreen->touch(t);
+    return;
   }
   if (t.ok && curScreen && curScreen->touch) {
     curScreen->touch(t);

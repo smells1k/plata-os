@@ -41,6 +41,11 @@ static int shadeNotes(const char **out, uint16_t *cols, int max) {
   return n > max ? max : n;
 }
 
+/* раскладка — считаем один раз, чтобы касания точно совпадали с картинкой */
+struct ShadeBox { int y, h; const char *name; };
+
+int shClose = SH_Y, shBright = 0, shVol = 0, shTiles = 0, shBottom = SCR_H - 34;
+
 void drawShade() {
   /* фон — обычный экран, сверху шторка */
   if (curScreen && curScreen->draw && curScreen != &SCR_SHADE) {
@@ -51,31 +56,32 @@ void drawShade() {
 
   int y = SH_Y;
   tft.fillRect(0, y, SCR_W, SCR_H - y, C_BG);
-  tft.fillRect(0, y, SCR_W, 18, C_PANEL);
-  textDraw(8, y + 3, "БЫСТРО", F_SM, C_ACC);
-  textRight(SCR_W - 38, y + 3, "закрыть ▼", F_SM, C_DIM);
-  y += 22;
+  tft.fillRect(0, y, SCR_W, 20, C_PANEL);
+  textDraw(8, y + 4, "БЫСТРО", F_SM, C_ACC);
+  textRight(SCR_W - 12, y + 4, "СВЕРНУТЬ ▲", F_SM, C_TXT);
+  shClose = y; y += 26;
 
   /* ── яркость ── */
-  box(8, y, SCR_W - 16, 42, C_PANEL, C_LINE, 6);
+  box(8, y, SCR_W - 16, 44, C_PANEL, C_LINE, 6);
   textDraw(16, y + 4, "ЯРКОСТЬ ЭКРАНА", F_SM, C_DIM);
   textRight(SCR_W - 16, y + 4, String(blPwm).c_str(), F_SM, C_TXT);
-  barDraw(16, y + 22, SCR_W - 32, 12, (int)blPwm * 100 / 255, C_WARN);
-  shadeY[0] = y; y += 48;
+  barDraw(16, y + 24, SCR_W - 32, 14, (int)blPwm * 100 / 255, C_WARN);
+  shBright = y + 22; y += 50;
 
   /* ── громкость ПК ── */
-  box(8, y, SCR_W - 16, 42, C_PANEL, C_LINE, 6);
+  box(8, y, SCR_W - 16, 44, C_PANEL, C_LINE, 6);
   textDraw(16, y + 4, "ГРОМКОСТЬ ПК", F_SM, C_DIM);
   textRight(SCR_W - 16, y + 4, pcMuted ? "выкл" : (String(pcVol) + "%").c_str(),
             F_SM, pcMuted ? C_ERR : C_TXT);
-  barDraw(16, y + 22, SCR_W - 32, 12, pcVol, pcMuted ? C_ERR : C_ACC);
-  shadeY[1] = y; y += 48;
+  barDraw(16, y + 24, SCR_W - 32, 14, pcVol, pcMuted ? C_ERR : C_ACC);
+  shVol = y + 22; y += 50;
 
   /* ── плитки 3×2 ── */
   const char *names[6] = { "Свет", "Часы", "Игры", "Настр.", "Обновл.", "ПК" };
+  shTiles = y;
   for (int i = 0; i < 6; i++) {
     int c = i % 3, r = i / 3;
-    int x = 8 + c * 78, yy = y + r * 46;
+    int x = 8 + c * 78, yy = y + r * 48;
     bool on = (i == 0 && ledR + ledG + ledB > 0) || (i == 5 && pcHost.length());
     shadeItem(x, yy, 74, names[i],
               i == 0 ? (String("ярк ") + ledBri).c_str()
@@ -85,7 +91,7 @@ void drawShade() {
                                                    : "открыть"))),
               on, i == 5 ? C_OK : C_ACC);
   }
-  y += 92;
+  y += 100;
 
   /* ── уведомления ── */
   textDraw(8, y, "УВЕДОМЛЕНИЯ", F_SM, C_DIM);
@@ -100,45 +106,41 @@ void drawShade() {
     y += 30;
   }
 
-  btnDraw(8, SCR_H - 32, SCR_W - 16, 26, "ЗАКРЫТЬ ▼", C_PANEL2, C_TXT, F_SM);
+  btnDraw(8, SCR_H - 34, SCR_W - 16, 30, "ЗАКРЫТЬ ▲", C_PANEL2, C_TXT, F_MD);
+  shBottom = SCR_H - 34;
 }
 
 void openShade() { shadeOpen = true; go(&SCR_SHADE); }
 void closeShade() { shadeOpen = false; go(&SCR_LAUNCH); }
 
 void shadeTouch(TouchPt t) {
-  /* закрыть */
-  if (t.y >= SCR_H - 34 || (t.y <= SH_Y + 20 && t.x > SCR_W - 90)) { closeShade(); return; }
-  if (t.y <= SH_Y) { closeShade(); return; }        /* ручка = закрыть */
+  /* свернуть: крестик, кнопка внизу, ручка, любой свайп вверх */
+  if (t.y >= shBottom) { closeShade(); return; }
+  if (t.y <= shClose + 20) { closeShade(); return; }
 
-  /* яркость */
-  if (t.y >= shadeY[0] && t.y < shadeY[0] + 42) {
+  /* яркость экрана */
+  if (t.y >= shBright && t.y < shBright + 20) {
     blSet(constrain(map(t.x, 16, SCR_W - 16, 10, 255), 10, 255));
     cfgSave();
     drawShade();
     return;
   }
+
   /* громкость ПК */
-  if (t.y >= shadeY[1] && t.y < shadeY[1] + 42) {
+  if (t.y >= shVol && t.y < shVol + 20) {
     pcCmd("vol_up");
     drawShade();
     return;
   }
 
   /* плитки */
-  int ty = shadeY[1] + 48;
-  if (t.y >= ty && t.y < ty + 92) {
-    int c = (t.x - 8) / 78, r = (t.y - ty) / 46;
+  if (t.y >= shTiles && t.y < shTiles + 96) {
+    int c = (t.x - 8) / 78, r = (t.y - shTiles) / 48;
     if (c < 0 || c > 2 || r < 0 || r > 1) return;
-    switch (r * 3 + c) {
-      case 0: go(&SCR_LIGHT); break;
-      case 1: go(&SCR_CLOCK); break;
-      case 2: go(&SCR_GAMES); break;
-      case 3: go(&SCR_SET); break;
-      case 4: go(&SCR_UPD); break;
-      case 5: go(&SCR_PC); break;
-    }
+    const Screen *dst[6] = { &SCR_LIGHT, &SCR_CLOCK, &SCR_GAMES,
+                             &SCR_SET,   &SCR_UPD,   &SCR_PC };
     shadeOpen = false;
+    go(dst[r * 3 + c]);
     return;
   }
 }
