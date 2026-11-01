@@ -262,8 +262,7 @@ bool otaInstall() {
 
 /* ── экран ── */
 void drawUpd() {
-  statusDraw();
-  headline(10, 24, "ОБНОВЛЕНИЕ", C_WHITE, 20);
+  topBack("ОБНОВЛЕНИЕ", 18);
 
   box(10, 48, SCR_W - 20, 32, C_PANEL, C_LINE, 6);
   textDraw(18, 52, "У ТЕБЯ", F_SM, C_DIM);
@@ -284,13 +283,12 @@ void drawUpd() {
   else textCenter(238, wifiOk ? "один файл: и для кабеля, и для воздуха" : "нужен Wi-Fi",
                   F_SM, C_DIM);
 
-  btnDraw(10, SCR_H - 96, SCR_W - 20, 28, "Проверить обновление", C_PANEL, C_TXT, F_SM);
-  btnDraw(10, SCR_H - 64, SCR_W - 20, 28, "Установить с GitHub", C_ACC, C_WHITE, F_SM);
-  btnDraw(10, SCR_H - 32, SCR_W - 20, 28, "НАЗАД", C_PANEL, C_TXT, F_SM);
+  btnDraw(10, SCR_H - 68, SCR_W - 20, 30, "Проверить обновление", C_PANEL, C_TXT, F_SM);
+  btnDraw(10, SCR_H - 34, SCR_W - 20, 30, "Установить с GitHub", C_ACC, C_WHITE, F_SM);
 }
 
 void updTouch(TouchPt t) {
-  if (t.y >= SCR_H - 32) { go(&SCR_MORE); return; }
-  if (t.y >= SCR_H - 64 && t.y < SCR_H - 36) { otaInstall(); return; }
-  if (t.y >= SCR_H - 96 && t.y < SCR_H - 68) { otaCheck(); drawUpd(); return; }
+  if (topBackHit(t)) { go(&SCR_MORE); return; }
+  if (t.y >= SCR_H - 34) { otaInstall(); return; }
+  if (t.y >= SCR_H - 68 && t.y < SCR_H - 38) { otaCheck(); drawUpd(); return; }
 }

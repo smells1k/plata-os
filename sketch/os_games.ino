@@ -14,8 +14,7 @@ static bool     memShow = false;
 static String memStatus = "нажми «Старт»";
 
 void drawMemory() {
-  statusDraw();
-  headline(10, 26, "ПРОВЕРЬ ПАМЯТЬ", C_WHITE, 18);
+  topBack("ПРОВЕРЬ ПАМЯТЬ", 18);
   textDraw(10, 50, memStatus.c_str(), F_SM, memPos ? C_WARN : C_DIM);
 
   /* сетка 3x2 */
@@ -29,7 +28,6 @@ void drawMemory() {
   textDraw(10, 240, (String("уровень ") + (memLevel ? memLevel : 1) + " · найдено " + memPos).c_str(), F_SM, C_DIM);
 
   btnDraw(10, SCR_H - 38, 106, 30, "СТАРТ", C_ACC, C_WHITE, F_SM);
-  btnDraw(124, SCR_H - 38, 106, 30, "НАЗАД", C_PANEL, C_TXT, F_SM);
 }
 
 static void memStart() {
@@ -49,6 +47,7 @@ static void memStart() {
 }
 
 void memoryTouch(TouchPt t) {
+  if (topBackHit(t)) { go(&SCR_GAMES); return; }
   if (t.y >= SCR_H - 38) {
     if (t.x < 120) { memStart(); }
     else go(&SCR_GAMES);
@@ -95,8 +94,7 @@ static uint32_t reactBest = 0;
 static String   reactOut = "нажми «Старт»";
 
 void drawReact() {
-  statusDraw();
-  headline(10, 26, "РЕАКЦИЯ", C_WHITE, 20);
+  topBack("РЕАКЦИЯ", 20);
 
   uint16_t boxc = reactState == 1 ? 0x3666 : reactState == 3 ? C_ERR : C_PANEL;
   box(10, 60, SCR_W - 20, 150, boxc, C_LINE, 10);
@@ -138,12 +136,10 @@ void reactTouch(TouchPt t) {
 static String diceOut = "—";
 
 void drawDice() {
-  statusDraw();
-  headline(10, 26, "КУБИК", C_WHITE, 20);
+  topBack("КУБИК", 20);
   box(30, 70, 180, 150, C_PANEL, C_LINE, 12);
   headline(90, 120, diceOut.c_str(), C_WHITE, 44);
   btnDraw(10, SCR_H - 90, SCR_W - 20, 36, "БРОСИТЬ", C_ACC, C_WHITE, F_MD);
-  btnDraw(10, SCR_H - 44, SCR_W - 20, 30, "НАЗАД", C_PANEL, C_TXT, F_SM);
 }
 
 void diceTouch(TouchPt t) {
@@ -166,14 +162,12 @@ void diceTouch(TouchPt t) {
 static String coinOut = "—";
 
 void drawCoin() {
-  statusDraw();
-  headline(10, 26, "МОНЕТКА", C_WHITE, 20);
+  topBack("МОНЕТКА", 20);
   box(30, 70, 180, 150, C_PANEL, C_LINE, 12);
   tft.fillCircle(120, 145, 46, C_PANEL2);
   tft.drawCircle(120, 145, 46, C_LINE);
   headline(78, 132, coinOut.c_str(), C_WHITE, 22);
   btnDraw(10, SCR_H - 90, SCR_W - 20, 36, "БРОСИТЬ", C_ACC, C_WHITE, F_MD);
-  btnDraw(10, SCR_H - 44, SCR_W - 20, 30, "НАЗАД", C_PANEL, C_TXT, F_SM);
 }
 
 void coinTouch(TouchPt t) {
@@ -197,8 +191,7 @@ static bool    simInput = false, simPlaying = false;
 static String  simOut = "нажми «Старт»";
 
 void drawSimon() {
-  statusDraw();
-  headline(10, 26, "САЙМОН", C_WHITE, 20);
+  topBack("САЙМОН", 20);
   textDraw(10, 52, simOut.c_str(), F_SM, C_WARN);
 
   /* три кнопки-цвета */
@@ -212,7 +205,6 @@ void drawSimon() {
   textDraw(10, 252, (String("уровень ") + simLevel + (simBest ? String(" · рекорд ") + simBest : String(""))).c_str(), F_SM, C_DIM);
 
   btnDraw(10, SCR_H - 38, 106, 30, "СТАРТ", C_ACC, C_WHITE, F_SM);
-  btnDraw(124, SCR_H - 38, 106, 30, "НАЗАД", C_PANEL, C_TXT, F_SM);
 }
 
 static void simonShow() {
@@ -313,8 +305,7 @@ static void ttDrawBoard() {
 }
 
 void drawTicTac() {
-  statusDraw();
-  headline(10, 26, "КРЕСТИКИ-НОЛИКИ", C_WHITE, 16);
+  topBack("КРЕСТИКИ-НОЛИКИ", 16);
   textDraw(10, 52, ttOut.c_str(), F_SM, C_WARN);
   ttDrawBoard();
   btnDraw(10, SCR_H - 38, SCR_W - 20, 30, "ЗАНОВО", C_ACC, C_WHITE, F_SM);

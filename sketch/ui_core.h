@@ -136,6 +136,11 @@ static bool g_dirty = true;
 static inline void scrFill(uint16_t c) { tft.fillScreen(c); }
 
 /* ширина строки в пикселях */
+/* цвет из трёх составляющих: 5-6-5 */
+static uint16_t rgb565(uint8_t r, uint8_t g, uint8_t b) {
+  return ((uint16_t)(r & 0xF8) << 8) | ((uint16_t)(g & 0xFC) << 3) | (b >> 3);
+}
+
 static int textW(const char *s, uint8_t f) {
   const UIFont &fn = UIFONTS[f];
   int w = 0;

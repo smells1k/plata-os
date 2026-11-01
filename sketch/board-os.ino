@@ -30,7 +30,7 @@
 
 /* Версия и канал управления. Меняется при каждой пересборке —
    по ней сразу видно, прошита ли новая прошивка. */
-static const char *OS_VER = "11.0";
+static const char *OS_VER = "12.0";
 #if USE_USB_DISPLAY
 static const char *OS_CH = "USB";
 #else
@@ -74,6 +74,8 @@ String   city = "Хабаровск";
 
 String   boardIp = "";
 bool     wifiOk = false;
+bool     shadeOpen = false;        /* ручка справа открывает шторку */
+int      shadeY[2] = { 0, 0 };     /* где нарисованы ползунки */
 bool     updNew = false;           /* на GitHub лежит версия новее */
 String   updTag = "";              /* какая именно */
 String   ghTag = "";               /* версия в последнем релизе GitHub */
@@ -278,6 +280,12 @@ static void cfgLoad() {
 /* ══════════ ЭКРАНЫ ══════════ */
 void drawLauncher();  void launcherTouch(TouchPt);
 void drawUpd();       void updTouch(TouchPt);
+void drawShade();     void shadeTouch(TouchPt);
+void drawColor();     void colorTouch(TouchPt);
+void drawTimer();     void timerTouch(TouchPt);
+void drawStop();      void stopTouch(TouchPt);
+void drawNote();      void noteTouch(TouchPt);
+void openShade();     void closeShade();
 bool otaCheck(bool quiet);  bool otaInstall();
 void otaStart();      void otaTick();
 void drawLight();     void lightTouch(TouchPt);
@@ -308,6 +316,11 @@ Screen SCR_INFO   = { "инфо",    drawInfo,     infoTouch };
 Screen SCR_GAMES  = { "игры",    drawGames,    gamesTouch };
 Screen SCR_MORE   = { "доп",     drawMore,     moreTouch };
 Screen SCR_UPD    = { "обновл",  drawUpd,      updTouch };
+Screen SCR_COLOR  = { "цвет",    drawColor,    colorTouch };
+Screen SCR_TIMER  = { "таймер",  drawTimer,    timerTouch };
+Screen SCR_STOP   = { "секунды", drawStop,     stopTouch };
+Screen SCR_NOTE   = { "заметка", drawNote,     noteTouch };
+Screen SCR_SHADE  = { "шторка",  drawShade,    shadeTouch };
 Screen SCR_TORCH  = { "фонарь",  drawTorch,    torchTouch };
 Screen SCR_SYS    = { "система", drawSys,      sysTouch };
 Screen SCR_REBOOT = { "ребут",   drawReboot,   rebootTouch };
@@ -373,28 +386,32 @@ static void statusDraw() {
   /* слева — время */
   textDraw(6, 5, timeStr().c_str(), F_SM, wifiOk ? C_TXT : C_DIM);
 
-  /* справа — канал управления ПК */
-  /* Wi-Fi: точки сигнала (для часов и погоды) */
+  /* справа — точки Wi-Fi */
   if (wifiOk) {
     int bars = rssiVal > -60 ? 4 : rssiVal > -72 ? 3 : 2;
-    int wx = SCR_W - 92, wy = 15;
+    int wx = SCR_W - 58, wy = 15;
     for (int i = 0; i < 4; i++) {
       int h = 3 + i * 2;
       tft.fillRect(wx + i * 4, wy - h, 3, h, i < bars ? C_OK : C_LINE);
     }
   }
 
-#if USE_USB_DISPLAY
-  /* маленький значок USB: вилка */
-  int bx = SCR_W - 54;
-  tft.fillRect(bx, 9, 3, 6, C_OK);          /* хвост */
-  tft.drawRect(bx + 3, 7, 8, 10, C_OK);     /* корпус */
-  tft.fillRect(bx + 5, 9, 2, 2, C_OK);
-  tft.fillRect(bx + 5, 12, 2, 2, C_OK);
-  textRight(SCR_W - 62, 5, "USB", F_SM, C_OK);
-#else
-  textRight(SCR_W - 8, 5, wifiOk ? "сеть" : "нет", F_SM, wifiOk ? C_OK : C_ERR);
-#endif
+  /* всегда на месте: ручка быстрых настроек */
+  int hx = SCR_W - 30, hy = 11;
+  tft.fillRoundRect(hx, hy - 4, 22, 9, 4, shadeOpen ? C_ACC : C_PANEL2);
+  for (int i = 0; i < 3; i++)
+    tft.fillRect(hx + 4 + i * 6, hy, 3, 2, shadeOpen ? C_BG : C_DIM);
+}
+
+/* заголовок с кнопкой «назад» сверху — на всех внутренних экранах */
+static void topBack(const char *title, uint8_t px = 16) {
+  statusDraw();
+  btnDraw(5, 25, 34, 21, "<", C_PANEL2, C_TXT, F_MD);
+  headline(45, 26, title, C_WHITE, px);
+}
+
+static bool topBackHit(TouchPt t) {
+  return t.y >= 24 && t.y <= 49 && t.x >= 4 && t.x <= 42;
 }
 
 static void drawNavBack(const char *label = "НАЗАД", int y = SCR_H - 40) {
@@ -467,8 +484,8 @@ void drawLauncher() {
   textRight(SCR_W - 8, 26, OS_VER, F_SM, C_DIM);
 #endif
 
-  const char *names[8] = { "Свет", "Часы", "ПК", "Игры", "Настр.", "Инфо", "Ещё", "Фонарь" };
-  uint16_t acc[8] = { 0xFBE0, 0x2D7F, 0x3666, 0xC986, 0x6B4D, 0x8010, 0x4A69, 0xFD20 };
+  const char *names[8] = { "Свет", "Часы", "ПК", "Игры", "Настр.", "Инфо", "Ещё", "Цвет" };
+  uint16_t acc[8] = { 0xFBE0, 0x2D7F, 0x3666, 0xC986, 0x6B4D, 0x8010, 0x4A69, 0xE1F0 };
 
   for (int i = 0; i < 8; i++) {
     int col = i % 4, row = i / 4;
@@ -497,7 +514,7 @@ void launcherTouch(TouchPt t) {
   if (t.x - TL_X0 - col * (TL_W + TL_GX) > TL_W) return;
   if (t.y - TL_Y0 - row * (TL_H + TL_GY) > TL_H) return;
   const Screen *all[8] = { &SCR_LIGHT, &SCR_CLOCK, &SCR_PC, &SCR_GAMES,
-                           &SCR_SET, &SCR_INFO, &SCR_MORE, &SCR_TORCH };
+                           &SCR_SET, &SCR_INFO, &SCR_MORE, &SCR_COLOR };
   go(all[row * 4 + col]);
 }
 
@@ -528,10 +545,10 @@ void drawLight() {
   }
 
   btnDraw(10, SCR_H - 40, 106, 32, "ВЫКЛЮЧИТЬ", ledLit ? C_ERR : C_PANEL, C_WHITE, F_SM);
-  btnDraw(124, SCR_H - 40, 106, 32, "НАЗАД", C_PANEL, C_TXT, F_SM);
 }
 
 void lightTouch(TouchPt t) {
+  if (topBackHit(t)) { go(&SCR_LAUNCH); return; }
   if (t.y >= SCR_H - 40) {
     if (t.x < 120) { ledR = ledG = ledB = 0; ledMode = 0; ledApply(); cfgSave(); }
     go(&SCR_LAUNCH);
@@ -599,7 +616,7 @@ void drawClock() {
   if (!wifiOk) textDraw(26, 232, "нет сети", F_SM, C_ERR);
 
   btnDraw(10, SCR_H - 40, 106, 32, "ОБНОВИТЬ", C_PANEL, C_TXT, F_SM);
-  btnDraw(124, SCR_H - 40, 106, 32, "НАЗАД", C_PANEL, C_TXT, F_SM);
+  btnDraw(124, SCR_H - 40, 106, 32, "ПОГОДА", C_PANEL, C_TXT, F_SM);
 }
 
 void clockTouch(TouchPt t) {
@@ -746,20 +763,13 @@ static void drawVolBar(int x, int y, int w, int h) {
 }
 
 void drawPC() {
-  statusDraw();
-
-#if USE_USB_DISPLAY
-  tft.bigText(8, 22, C_WHITE, 19, "КОМПЬЮТЕР");
-  tft.bigText(SCR_W - 8, 28, C_OK, 9, "USB", 1);
-#else
-  textDraw(8, 24, "КОМПЬЮТЕР", F_MD, C_WHITE);
-#endif
+  topBack("КОМПЬЮТЕР", 15);
 
   /* ── строка связи ── */
-  box(8, 46, SCR_W - 16, 30, C_PANEL, C_LINE, 6);
-  tft.fillCircle(18, 61, 4, C_OK);
+  box(8, 50, SCR_W - 16, 28, C_PANEL, C_LINE, 6);
+  tft.fillCircle(18, 64, 4, C_OK);
 #if USE_USB_DISPLAY
-  textDraw(28, 53, (pcHost.length() ? "по проводу · " + pcHost : String("по проводу")).c_str(),
+  textDraw(28, 56, (pcHost.length() ? "по проводу · " + pcHost : String("по проводу")).c_str(),
            F_SM, C_OK);
 #else
   textDraw(28, 53, "сеть · " + pcIp, F_SM, pcStatusCol);
@@ -790,13 +800,13 @@ void drawPC() {
 
   /* ── низ ── */
   btnDraw(8, SCR_H - 36, 108, 30, "⚡ Разбудить", C_PANEL, C_TXT, F_SM);
-  btnDraw(124, SCR_H - 36, 108, 30, "НАЗАД", C_PANEL, C_TXT, F_SM);
 }
 
 void pcTouch(TouchPt t) {
+  if (topBackHit(t)) { go(&SCR_LAUNCH); return; }
   /* ── нижний ряд ── */
   if (t.y >= SCR_H - 36) {
-    if (t.x < 116) {                       /* разбудить */
+    {                                      /* разбудить */
       if (!pcMac.length()) { pcStatus = "MAC не задан"; pcStatusCol = C_WARN; go(&SCR_PC); return; }
       sendWol();
       pcStatus = "WoL отправлен";
@@ -1150,7 +1160,6 @@ void drawInfo() {
     textRight(SCR_W - 14, y + 3, textClip(rows[i].v, 130, F_SM).c_str(), F_SM, C_TXT);
     y += 24;
   }
-  drawNavBack("НАЗАД", SCR_H - 36);
 }
 
 void infoTouch(TouchPt t) {
@@ -1373,6 +1382,12 @@ void loop() {
   }
 
   TouchPt t = touchGet();
+  if (t.ok && !shadeOpen && t.y <= STATUS_H && t.x >= SCR_W - 40) {
+    openShade();
+    uint32_t t0 = millis();
+    while (touchGet().ok && millis() - t0 < 3000) { delay(5); }
+    return;
+  }
   if (t.ok && curScreen && curScreen->touch) {
     curScreen->touch(t);
 #if USE_USB_DISPLAY
