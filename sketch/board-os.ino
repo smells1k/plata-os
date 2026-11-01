@@ -30,7 +30,7 @@
 
 /* Версия и канал управления. Меняется при каждой пересборке —
    по ней сразу видно, прошита ли новая прошивка. */
-static const char *OS_VER = "12.4";
+static const char *OS_VER = "13.0";
 #if USE_USB_DISPLAY
 static const char *OS_CH = "USB";
 #else
@@ -288,6 +288,7 @@ void drawNote();      void noteTouch(TouchPt);
 void openShade();     void closeShade();
 bool otaCheck(bool quiet);  bool otaInstall();
 void otaStart();      void otaTick();
+void bootScreen();    void bootOut();
 void drawLight();     void lightTouch(TouchPt);
 void drawClock();     void clockTouch(TouchPt);
 void drawPC();        void pcTouch(TouchPt);
@@ -617,6 +618,7 @@ static void weatherFetch();
 
 void drawClock() {
   statusDraw();
+  btnDraw(5, 25, 34, 21, "<", C_PANEL2, C_TXT, F_MD);
   struct tm t;
   bool ok = nowTime(t);
   char hh[4] = "--", mm[4] = "--";
@@ -653,14 +655,15 @@ void drawClock() {
   if (weatherC.length()) textDraw(26, 232, textClip(weatherC, SCR_W - 60, F_SM).c_str(), F_SM, C_DIM);
   if (!wifiOk) textDraw(26, 232, "нет сети", F_SM, C_ERR);
 
-  btnDraw(10, SCR_H - 40, 106, 32, "ОБНОВИТЬ", C_PANEL, C_TXT, F_SM);
-  btnDraw(124, SCR_H - 40, 106, 32, "ПОГОДА", C_PANEL, C_TXT, F_SM);
+  btnDraw(10, SCR_H - 40, 106, 32, "ПОГОДА", C_PANEL, C_TXT, F_SM);
+  btnDraw(124, SCR_H - 40, 106, 32, "НАЗАД", C_PANEL, C_TXT, F_SM);
 }
 
 void clockTouch(TouchPt t) {
+  if (topBackHit(t)) { go(&SCR_LAUNCH); return; }
   if (t.y < SCR_H - 40) return;
-  if (t.x < 120) { weatherFetch(); go(&SCR_CLOCK); }
-  else go(&SCR_LAUNCH);
+  if (t.x < 120) { weatherFetch(); go(&SCR_CLOCK); }   /* левая — погода */
+  else go(&SCR_LAUNCH);                                 /* правая — назад */
 }
 
 /* ══════════ КОМПЬЮТЕР ══════════ */
@@ -1271,9 +1274,8 @@ void setup() {
   pcCmdUsb("host");
 #endif
 
-  textCenter(120, "ПЛАТА-ОС", F_LG, C_WHITE);
-  textCenter(152, (String("v") + OS_VER).c_str(), F_SM, C_DIM);
-  delay(600);
+  bootScreen();                 /* заставка с анимацией */
+  delay(150);
 
   /* аварийный вход в калибровку: кнопка D4 зажата при включении */
 #if !USE_USB_DISPLAY
@@ -1420,11 +1422,27 @@ void loop() {
   }
 
   TouchPt t = touchGet();
-  if (t.ok && !shadeOpen && t.y <= STATUS_H && t.x >= SCR_W - 40) {
-    openShade();
-    uint32_t t0 = millis();
-    while (touchGet().ok && millis() - t0 < 3000) { delay(5); }
-    return;
+  if (t.ok && !shadeOpen) {
+    /* ручка справа — открыть сразу */
+    if (t.y <= STATUS_H && t.x >= SCR_W - 40) {
+      openShade();
+      while (touchGet().ok) delay(5);
+      return;
+    }
+    /* свайп сверху вниз — как на телефоне */
+    if (t.y <= STATUS_H + 18) {
+      int y0 = t.y, yMax = y0;
+      uint32_t t0 = millis();
+      while (touchGet().ok && millis() - t0 < 1500) {
+        TouchPt d = touchGet();
+        if (d.ok && d.y > yMax) yMax = d.y;
+        delay(5);
+      }
+      if (yMax - y0 > 45) {          /* потянул вниз — открываем */
+        openShade();
+        return;
+      }
+    }
   }
   if (t.ok && curScreen && curScreen->touch) {
     curScreen->touch(t);
