@@ -30,7 +30,7 @@
 
 /* Версия и канал управления. Меняется при каждой пересборке —
    по ней сразу видно, прошита ли новая прошивка. */
-static const char *OS_VER = "12.1";
+static const char *OS_VER = "12.2";
 #if USE_USB_DISPLAY
 static const char *OS_CH = "USB";
 #else
@@ -74,7 +74,8 @@ String   city = "Хабаровск";
 
 String   boardIp = "";
 bool     wifiOk = false;
-bool     shadeOpen = false;        /* ручка справа открывает шторку */
+bool     shadeOpen = false;
+int      lightBarY[3] = { 157, 191, 225 };   /* где ползунки R/G/B */
 int      shadeY[2] = { 0, 0 };     /* где нарисованы ползунки */
 bool     updNew = false;           /* на GitHub лежит версия новее */
 String   updTag = "";              /* какая именно */
@@ -281,7 +282,6 @@ static void cfgLoad() {
 void drawLauncher();  void launcherTouch(TouchPt);
 void drawUpd();       void updTouch(TouchPt);
 void drawShade();     void shadeTouch(TouchPt);
-void drawColor();     void colorTouch(TouchPt);
 void drawTimer();     void timerTouch(TouchPt);
 void drawStop();      void stopTouch(TouchPt);
 void drawNote();      void noteTouch(TouchPt);
@@ -316,7 +316,6 @@ Screen SCR_INFO   = { "инфо",    drawInfo,     infoTouch };
 Screen SCR_GAMES  = { "игры",    drawGames,    gamesTouch };
 Screen SCR_MORE   = { "доп",     drawMore,     moreTouch };
 Screen SCR_UPD    = { "обновл",  drawUpd,      updTouch };
-Screen SCR_COLOR  = { "цвет",    drawColor,    colorTouch };
 Screen SCR_TIMER  = { "таймер",  drawTimer,    timerTouch };
 Screen SCR_STOP   = { "секунды", drawStop,     stopTouch };
 Screen SCR_NOTE   = { "заметка", drawNote,     noteTouch };
@@ -466,9 +465,11 @@ static void iconDraw(int kind, int cx, int cy, uint16_t col) {
       tft.fillRect(cx - 7, cy - 1, 14, 3, col);
       tft.fillRect(cx - 1, cy - 7, 3, 14, col);
       break;
-    case 7:                              /* фонарик */
-      tft.fillRoundRect(cx - 6, cy - 10, 12, 8, 3, col);
-      tft.fillRect(cx - 3, cy - 2, 6, 12, col);
+    case 7:                              /* таймер: песочные часы */
+      tft.drawFastHLine(cx - 8, cy - 11, 17, col);
+      tft.drawFastHLine(cx - 8, cy + 9, 17, col);
+      tft.drawLine(cx - 7, cy - 9, cx + 7, cy + 7, col);
+      tft.drawLine(cx + 7, cy - 9, cx - 7, cy + 7, col);
       break;
   }
 }
@@ -484,8 +485,8 @@ void drawLauncher() {
   textRight(SCR_W - 8, 26, OS_VER, F_SM, C_DIM);
 #endif
 
-  const char *names[8] = { "Свет", "Часы", "ПК", "Игры", "Настр.", "Инфо", "Ещё", "Цвет" };
-  uint16_t acc[8] = { 0xFBE0, 0x2D7F, 0x3666, 0xC986, 0x6B4D, 0x8010, 0x4A69, 0xE1F0 };
+  const char *names[8] = { "Свет", "Часы", "ПК", "Игры", "Настр.", "Инфо", "Ещё", "Таймер" };
+  uint16_t acc[8] = { 0xFBE0, 0x2D7F, 0x3666, 0xC986, 0x6B4D, 0x8010, 0x4A69, 0x36E6 };
 
   for (int i = 0; i < 8; i++) {
     int col = i % 4, row = i / 4;
@@ -514,7 +515,7 @@ void launcherTouch(TouchPt t) {
   if (t.x - TL_X0 - col * (TL_W + TL_GX) > TL_W) return;
   if (t.y - TL_Y0 - row * (TL_H + TL_GY) > TL_H) return;
   const Screen *all[8] = { &SCR_LIGHT, &SCR_CLOCK, &SCR_PC, &SCR_GAMES,
-                           &SCR_SET, &SCR_INFO, &SCR_MORE, &SCR_COLOR };
+                           &SCR_SET, &SCR_INFO, &SCR_MORE, &SCR_TIMER };
   go(all[row * 4 + col]);
 }
 
@@ -526,51 +527,79 @@ static const uint8_t  SW_G[6] = { 40, 20, 150, 100, 0, 0 };
 static const uint8_t  SW_B[6] = { 180, 20, 60, 0, 160, 0 };
 
 void drawLight() {
-  statusDraw();
-  textDraw(10, 28, "ПОДСВЕТКА", F_MD, C_WHITE);
+  topBack("ПОДСВЕТКА", 18);
 
-  for (int i = 0; i < 6; i++) {
-    int cx = 10 + (i % 3) * 76, cy = 52 + (i / 3) * 38;
-    box(cx, cy, 68, 30, SW_C[i], C_LINE, 6);
+  /* ── текущий цвет ── */
+  uint16_t cur = rgb565(ledR, ledG, ledB);
+  tft.fillRoundRect(10, 48, 84, 84, 10, cur);
+  tft.drawRoundRect(10, 48, 84, 84, 10, C_LINE);
+
+  textDraw(104, 52, ledLit ? "включён" : "выключен", F_SM, ledLit ? C_OK : C_DIM);
+  textDraw(104, 70, ("яркость " + String(ledBri)).c_str(), F_SM, C_DIM);
+  textDraw(104, 88, ("R " + String(ledR)).c_str(), F_SM, C_ERR);
+  textDraw(104, 104, ("G " + String(ledG)).c_str(), F_SM, C_OK);
+  textDraw(104, 120, ("B " + String(ledB)).c_str(), F_SM, C_ACC);
+
+  /* ── три ползунка ── */
+  const char *nm[3] = { "КРАСНЫЙ", "ЗЕЛЁНЫЙ", "СИНИЙ" };
+  uint8_t val[3] = { ledR, ledG, ledB };
+  uint16_t col[3] = { C_ERR, C_OK, C_ACC };
+  for (int i = 0; i < 3; i++) {
+    int y = 142 + i * 34;
+    textDraw(10, y, nm[i], F_SM, C_DIM);
+    textRight(SCR_W - 10, y, String(val[i]).c_str(), F_SM, C_TXT);
+    barDraw(10, y + 15, SCR_W - 20, 12, val[i] * 100 / 255, col[i]);
+    lightBarY[i] = y + 15;
   }
 
-  textDraw(10, 134, (String("ЯРКОСТЬ ") + ledBri).c_str(), F_SM, C_DIM);
-  barDraw(10, 150, SCR_W - 20, 18, (int)ledBri * 100 / 255, C_WARN);
+  /* ── эффекты ── */
+  textDraw(10, 244, "ЭФФЕКТЫ", F_SM, C_DIM);
+  const char *fx[4] = { "Радуга", "Дыхан.", "Строб", "Свеча" };
+  for (int i = 0; i < 4; i++)
+    btnDraw(10 + i * 56, 262, 52, 26, fx[i],
+            ledMode == i + 1 ? C_ACC : C_PANEL, C_TXT, F_SM);
 
-  textDraw(10, 176, "ЭФФЕКТЫ", F_SM, C_DIM);
-  const char *fx[6] = { "Радуга", "Дыхан.", "Строб", "Мигал.", "Свеча", "Перел." };
-  for (int i = 0; i < 6; i++) {
-    int cx = 10 + (i % 3) * 76, cy = 194 + (i / 3) * 34;
-    btnDraw(cx, cy, 68, 28, fx[i], ledMode == i + 1 ? C_ACC : C_PANEL, C_TXT, F_SM);
-  }
-
-  btnDraw(10, SCR_H - 40, 106, 32, "ВЫКЛЮЧИТЬ", ledLit ? C_ERR : C_PANEL, C_WHITE, F_SM);
+  btnDraw(10, SCR_H - 30, SCR_W - 20, 28, ledLit ? "ВЫКЛЮЧИТЬ ДИОД" : "ВКЛЮЧИТЬ ДИОД",
+          ledLit ? C_ERR : C_OK, C_WHITE, F_SM);
 }
 
 void lightTouch(TouchPt t) {
   if (topBackHit(t)) { go(&SCR_LAUNCH); return; }
-  if (t.y >= SCR_H - 40) {
-    if (t.x < 120) { ledR = ledG = ledB = 0; ledMode = 0; ledApply(); cfgSave(); }
-    go(&SCR_LAUNCH);
+
+  /* включить/выключить */
+  if (t.y >= SCR_H - 30) {
+    ledLit = !ledLit;
+    if (!ledLit) { ledMode = 0; neopixelWrite(RGB_PIN, 0, 0, 0); }
+    else ledApply();
+    cfgSave();
+    go(&SCR_LIGHT);
     return;
   }
-  if (t.y >= 52 && t.y < 128) {
-    int col = (t.x - 10) / 76, row = (t.y - 52) / 38;
-    if (col < 3 && row < 2) {
-      int i = row * 3 + col;
-      ledR = SW_R[i]; ledG = SW_G[i]; ledB = SW_B[i]; ledMode = 0;
-      ledApply(); cfgSave(); go(&SCR_LIGHT);
+
+  /* ползунки RGB */
+  for (int i = 0; i < 3; i++) {
+    if (t.y >= lightBarY[i] && t.y < lightBarY[i] + 18) {
+      int v = constrain(map(t.x, 10, SCR_W - 10, 0, 255), 0, 255);
+      if (i == 0) ledR = v; else if (i == 1) ledG = v; else ledB = v;
+      ledMode = 0;
+      ledLit = true;
+      ledApply();
+      cfgSave();
+      go(&SCR_LIGHT);
+      return;
     }
-    return;
   }
-  if (t.y >= 146 && t.y <= 172) {
-    ledBri = constrain(map(t.x, 10, SCR_W - 10, 1, 255), 1, 255);
-    ledApply(); cfgSave(); go(&SCR_LIGHT);
+
+  /* эффекты */
+  if (t.y >= 262 && t.y < 290) {
+    int i = (t.x - 10) / 56;
+    if (i < 0 || i > 3) return;
+    ledMode = (ledMode == i + 1) ? 0 : i + 1;
+    ledLit = true;
+    if (ledMode) ledApply(); else ledApply();
+    cfgSave();
+    go(&SCR_LIGHT);
     return;
-  }
-  if (t.y >= 194 && t.y <= 258) {
-    int col = (t.x - 10) / 76, row = (t.y - 194) / 34;
-    if (col < 3 && row < 2) { ledMode = row * 3 + col + 1; ledLit = true; cfgSave(); go(&SCR_LIGHT); }
   }
 }
 
