@@ -30,7 +30,7 @@
 
 /* Версия и канал управления. Меняется при каждой пересборке —
    по ней сразу видно, прошита ли новая прошивка. */
-static const char *OS_VER = "10.2";
+static const char *OS_VER = "11.0";
 #if USE_USB_DISPLAY
 static const char *OS_CH = "USB";
 #else
@@ -79,6 +79,8 @@ String   updTag = "";              /* какая именно */
 String   ghTag = "";               /* версия в последнем релизе GitHub */
 String   ghUrl = "";               /* прямая ссылка на .bin */
 uint32_t updLast = 0;              /* когда проверяли, millis() */
+uint32_t wifiDown = 0;             /* с какого момента нет сети */
+bool     otaOn    = false;         /* приёмник обновлений поднят */
 
 int      rssiVal = 0;
 String   weatherT = "—", weatherC = "";
@@ -130,6 +132,7 @@ void otaStart() {
   static bool started = false;
   if (!wifiOk || started) return;
   started = true;
+  otaOn = true;
 
   otaSrv.on("/", HTTP_GET, []() { otaSrv.send(200, "text/html; charset=utf-8", otaPage()); });
 
@@ -1058,9 +1061,8 @@ void wifiConnect(bool showProgress) {
     textCenter(120, "подключаюсь…", F_MD, C_TXT);
     textCenter(146, textClip(wSsid, SCR_W - 30, F_SM).c_str(), F_SM, C_DIM);
   }
-  WiFi.disconnect(true);
-  delay(200);
   WiFi.mode(WIFI_STA);
+  WiFi.setAutoReconnect(true);          /* сам вернётся, если сеть пропала */
   WiFi.begin(wSsid.c_str(), wPass.c_str());
   uint32_t t0 = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - t0 < 15000) {
@@ -1343,8 +1345,24 @@ void loop() {
   /* обновление строки состояния и живых экранов */
   if (millis() - lastUi > 1000) {
     lastUi = millis();
-    if (WiFi.status() == WL_CONNECTED) { wifiOk = true; rssiVal = WiFi.RSSI(); if (!boardIp.length()) boardIp = WiFi.localIP().toString(); }
-    else wifiOk = false;
+    if (WiFi.status() == WL_CONNECTED) {
+      bool was = wifiOk;
+      wifiOk = true;
+      wifiDown = 0;
+      rssiVal = WiFi.RSSI();
+      boardIp = WiFi.localIP().toString();
+      if (!was && !otaOn) {             /* связь вернулась — поднять приёмник */
+        otaStart();
+      }
+    } else {
+      wifiOk = false;
+      if (wifiDown == 0) wifiDown = millis() ? millis() : 1;
+      /* сеть пропала надолго — пробуем заново */
+      if (wSsid.length() && millis() - wifiDown > 20000UL) {
+        wifiDown = millis();
+        WiFi.reconnect();
+      }
+    }
 
     if (curScreen == &SCR_CLOCK) {
       if (millis() - weatherAt > 600000UL) weatherFetch();

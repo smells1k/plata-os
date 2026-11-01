@@ -89,11 +89,7 @@ bool otaCheck(bool quiet = false) {
     int q = body.indexOf('"', a + 1);
     if (q < 0) break;
     String u = body.substring(a + 1, q);
-    if (u.endsWith(".bin")) {
-      /* сначала ищем маленький образ для OTA — полный в слот не влезет */
-      if (u.indexOf("-app.bin") > 0) { ghUrl = u; break; }
-      if (!ghUrl.length()) ghUrl = u;
-    }
+    if (u.endsWith(".bin")) { ghUrl = u; break; }   /* файл один на всё */
     i = q;
   }
 
@@ -121,6 +117,51 @@ static void updBar() {
   tft.fillRect(70, 206, 100, 22, C_BG);
   textCenter(210, (String(updPct) + "%").c_str(), F_MD, C_TXT);
 }
+
+/* ══════════ ПРИЁМНИК ОБРАЗА ══════════ */
+/* Один и тот же файл годится и для кабеля, и для воздуха.
+   Полный образ 4 МБ: первые 0x10000 — загрузчик и разметка, они уже есть.
+   Конец программы виден по заполнению 0xFF. */
+struct OtaSink {
+  uint32_t skip  = 0;
+  uint32_t total = 0;
+  uint32_t seen  = 0;
+  uint32_t writ  = 0;
+  bool     stop  = false;
+
+  bool begin(uint32_t totalBytes) {
+    total = totalBytes;
+    skip  = (totalBytes > 0x180000UL) ? 0x10000UL : 0;
+    return Update.begin(UPDATE_SIZE_UNKNOWN);
+  }
+
+  bool feed(const uint8_t *buf, size_t n) {
+    if (stop) return false;
+    size_t off = 0;
+    if (seen < skip) {
+      size_t drop = n;
+      if (drop > skip - seen) drop = skip - seen;
+      seen += drop;
+      off = drop;
+      if (off >= n) return true;
+    }
+    size_t put = n - off;
+
+    bool fill = true;                      /* хвост образа добит 0xFF */
+    for (size_t i = 0; i < put; i++)
+      if (buf[off + i] != 0xFF) { fill = false; break; }
+    if (fill && writ > 0x20000) { stop = true; return false; }
+
+    if (Update.write((uint8_t *)buf + off, put) != put) { stop = true; return false; }
+    seen += put;
+    writ += put;
+    return true;
+  }
+
+  int pct() const { return total ? (int)((uint64_t)seen * 100 / total) : 0; }
+
+  bool finish() { return Update.end(true); }   /* размер = сколько записали */
+};
 
 /* ── установка ── */
 bool otaInstall() {
@@ -168,14 +209,9 @@ bool otaInstall() {
     drawUpd();
     return false;
   }
-  if (len > 1400000) {                     /* больше раздела приложения */
-    h.end();
-    updMsg = "файл великоват: " + String(len / 1024) + " КБ";
-    updCol = C_ERR;
-    drawUpd();
-    return false;
-  }
-  if (!Update.begin((size_t)len)) {
+
+  static OtaSink sink;
+  if (!sink.begin((uint32_t)len)) {
     h.end();
     updMsg = "не влезает в память";
     updCol = C_ERR;
@@ -185,12 +221,11 @@ bool otaInstall() {
 
   WiFiClient *st = h.getStreamPtr();
   uint8_t buf[1024];
-  size_t got = 0;
   int lastPct = -1;
   uint32_t t0 = millis();
 
-  while (got < (size_t)len) {
-    size_t want = (size_t)len - got;
+  while (sink.seen < (uint32_t)len && !sink.stop) {
+    size_t want = (size_t)len - sink.seen;
     if (want > sizeof(buf)) want = sizeof(buf);
     size_t n = st->read(buf, want);
     if (n == 0) {
@@ -200,18 +235,14 @@ bool otaInstall() {
       continue;
     }
     t0 = millis();
-    if (Update.write(buf, n) != n) break;
-    got += n;
-    int p = (int)((uint64_t)got * 100 / len);
-    if (p != lastPct) {
-      lastPct = p;
-      updPct = p;
-      updBar();
-    }
+    if (!sink.feed(buf, n)) break;
+
+    int p = sink.pct();
+    if (p != lastPct) { lastPct = p; updPct = p; updBar(); }
   }
   h.end();
 
-  if (got == (size_t)len && Update.end(false)) {
+  if ((sink.stop || sink.seen >= (uint32_t)len) && sink.writ > 0 && sink.finish()) {
     updPct = 100;
     updBar();
     updMsg = "готово, перезапускаюсь";
@@ -222,7 +253,7 @@ bool otaInstall() {
   }
 
   Update.abort();
-  updMsg = "оборвалось на " + String((int)(got * 100 / len)) + "%";
+  updMsg = "оборвалось на " + String(sink.writ / 1024) + " КБ";
   updCol = C_ERR;
   updPct = -1;
   drawUpd();
@@ -250,7 +281,7 @@ void drawUpd() {
   tft.drawRect(30, 176, w, 24, C_LINE);
   if (updPct > 0) tft.fillRect(32, 178, (w - 4) * updPct / 100, 20, C_ACC);
   if (updPct >= 0) textCenter(210, (String(updPct) + "%").c_str(), F_MD, C_TXT);
-  else textCenter(238, wifiOk ? "плата сама скачает и поставит" : "нужен Wi-Fi",
+  else textCenter(238, wifiOk ? "один файл: и для кабеля, и для воздуха" : "нужен Wi-Fi",
                   F_SM, C_DIM);
 
   btnDraw(10, SCR_H - 96, SCR_W - 20, 28, "Проверить обновление", C_PANEL, C_TXT, F_SM);
