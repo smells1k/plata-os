@@ -44,6 +44,41 @@ static int shadeNotes(const char **out, uint16_t *cols, int max) {
 /* раскладка — считаем один раз, чтобы касания точно совпадали с картинкой */
 struct ShadeBox { int y, h; const char *name; };
 
+/* ── свайп ── */
+/* Окно на ПК присылает нажатие (0x54) и отпускание (0x52) по отдельности,
+   экран платы — поток точек. Ловим движение, не мешая обычным нажатиям. */
+static int      swY0 = -1, swYMax = 0, swYMin = 9999;
+static uint32_t swAt = 0;
+
+void swipeHint(int x, int y) {
+  (void)x;
+  swY0 = y; swYMax = y; swYMin = y; swAt = millis();
+}
+
+/* true — жест был свайпом и уже обработан */
+bool swipeDone() {
+  if (swY0 < 0) return false;
+
+  TouchPt d = touchGet();
+  if (d.ok) {                                  /* палец ещё едет */
+    if (d.y > swYMax) swYMax = d.y;
+    if (d.y < swYMin) swYMin = d.y;
+    if (d.y > swY0 + 30) { swY0 = -1; openShade(); return true; }
+    if (d.y < swY0 - 30) { swY0 = -1; if (shadeOpen) { closeShade(); return true; } return true; }
+    if (millis() - swAt > 1500) swY0 = -1;      /* палец завис — сбрасываем */
+    return true;
+  }
+
+  /* палец отпущен: смотрим, что успели набрать */
+  int startY = swY0, up = swYMax, down = swYMin;
+  swY0 = -1;
+  if (up - down > 30) {
+    if (up > startY + 25) { openShade(); return true; }
+    if (startY > down + 25) { if (shadeOpen) closeShade(); return true; }
+  }
+  return false;                                 /* это было обычное нажатие */
+}
+
 int shClose = SH_Y, shBright = 0, shVol = 0, shNotes = 0, shBottom = SCR_H - 34;
 
 void drawShade() {

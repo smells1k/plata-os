@@ -286,6 +286,7 @@ void drawShade();     void shadeTouch(TouchPt);
 void drawCalibScreen(); void calTouch(TouchPt); void calibTick();
 void drawNote();      void noteTouch(TouchPt);
 void openShade();     void closeShade();
+void swipeHint(int x, int y);   bool swipeDone();
 bool otaCheck(bool quiet);  bool otaInstall();
 void otaStart();      void otaTick();
 void bootScreen();    void bootOut();
@@ -396,11 +397,11 @@ static void statusDraw() {
     }
   }
 
-  /* всегда на месте: ручка быстрых настроек */
-  int hx = SCR_W - 30, hy = 11;
-  tft.fillRoundRect(hx, hy - 4, 22, 9, 4, shadeOpen ? C_ACC : C_PANEL2);
+  /* всегда на месте: кнопка быстрых настроек */
+  int hx = SCR_W - 34, hy = 3;
+  tft.fillRoundRect(hx, hy, 30, 16, 4, shadeOpen ? C_ACC : C_PANEL2);
   for (int i = 0; i < 3; i++)
-    tft.fillRect(hx + 4 + i * 6, hy, 3, 2, shadeOpen ? C_BG : C_DIM);
+    tft.fillRect(hx + 5 + i * 7, hy + 7, 4, 2, shadeOpen ? C_BG : C_TXT);
 }
 
 /* заголовок с кнопкой «назад» сверху — на всех внутренних экранах */
@@ -408,6 +409,11 @@ static void topBack(const char *title, uint8_t px = 16) {
   statusDraw();
   btnDraw(4, 24, 46, 24, "<", C_PANEL2, C_WHITE, F_MD);
   headline(45, 26, title, C_WHITE, px);
+}
+
+/* ручка быстрых настроек в правом верхнем углу строки состояния */
+static bool shadeHandleHit(TouchPt t) {
+  return t.y <= STATUS_H + 6 && t.x >= SCR_W - 40;
 }
 
 static bool topBackHit(TouchPt t) {
@@ -1497,34 +1503,14 @@ void loop() {
     }
   }
 
+  /* свайп: окно на ПК присылает нажатие и отпускание по отдельности */
+  if (swipeDone()) return;
+
   TouchPt t = touchGet();
-  if (t.ok && !shadeOpen) {
-    /* ручка справа в статусной строке — открыть сразу */
-    if (t.y <= STATUS_H && t.x >= SCR_W - 40) {
-      openShade();
-      while (touchGet().ok) delay(5);
-      return;
-    }
-    /* жест: следим за пальцем до отпускания */
-    int y0 = t.y, yMax = t.y, yMin = t.y;
-    uint32_t t0 = millis();
-    while (millis() - t0 < 1200) {
-      TouchPt d = touchGet();
-      if (!d.ok) break;
-      if (d.y > yMax) yMax = d.y;
-      if (d.y < yMin) yMin = d.y;
-      delay(5);
-    }
-    int dist = yMax - yMin;
-    if (dist > 35) {
-      if (yMax > y0 + 30) { openShade(); return; }      /* вниз — открыть */
-      if (y0 > yMin + 30) {                             /* вверх — закрыть/игнор */
-        if (shadeOpen) { closeShade(); return; }
-        return;
-      }
-    }
-    /* это был обычный тап — отдаём экрану */
-    if (curScreen && curScreen->touch) curScreen->touch(t);
+  /* ручка в правом верхнем углу — открыть быстрые настройки с любого экрана */
+  if (t.ok && !shadeOpen && shadeHandleHit(t)) {
+    openShade();
+    while (touchGet().ok) delay(5);
     return;
   }
   if (t.ok && curScreen && curScreen->touch) {

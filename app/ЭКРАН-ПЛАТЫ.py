@@ -31,7 +31,7 @@ SCR_W, SCR_H = 240, 320
 BAUD = 460800
 import platform
 IS_WIN = platform.system() == "Windows"
-VERSION = "4.2"
+VERSION = "4.3"
 SYNC = 0xA5
 
 # ── опкоды ─────────────────────────────────────────────────
@@ -360,6 +360,7 @@ class Screen(tk.Tk):
         self.drawn = 0
         self.got_any = False
         self.touch_down = False
+        self.drag_y0 = 0
         self.fon = {}
         self.pc_done = 0
         self.state_at = 0.0
@@ -432,11 +433,18 @@ class Screen(tk.Tk):
     def press(self, e):
         x = min(max(int(e.x / self.scale), 0), SCR_W - 1)
         y = min(max(int(e.y / self.scale) + self.scroll, 0), 8000)
+        self.drag_y0 = y
         self.port.send(b"\x54" + x.to_bytes(2, "little") + y.to_bytes(2, "little"))
         self.touch_down = True
 
-    def release(self, _e):
+    def release(self, e):
         if self.touch_down:
+            x = min(max(int(e.x / self.scale), 0), SCR_W - 1)
+            y = min(max(int(e.y / self.scale) + self.scroll, 0), 8000)
+            # если палец уехал — сообщаем конечную точку ДО отпускания,
+            # чтобы плата увидела жест, а не просто тап
+            if abs(y - getattr(self, "drag_y0", y)) > 12:
+                self.port.send(b"\x54" + x.to_bytes(2, "little") + y.to_bytes(2, "little"))
             self.port.send(b"\x52")
             self.touch_down = False
 
