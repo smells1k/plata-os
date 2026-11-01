@@ -356,6 +356,7 @@ class Screen(tk.Tk):
         self.scroll = 0
         self.frozen = False
         self.frozen_at = 0.0
+        self.pending_clear = False
         self.drawn = 0
         self.got_any = False
         self.touch_down = False
@@ -472,13 +473,20 @@ class Screen(tk.Tk):
             if op == BATCH_ON:
                 self.frozen = True
                 self.frozen_at = time.time()
+                self.pending_clear = False
                 continue
             if op == BATCH_OFF:
                 self.frozen = False
+                if self.pending_clear:      # заставка закончилась — стираем её
+                    self.pending_clear = False
+                    cleared = True
+                    self.pkts = []
+                    self.done = 0
                 continue
             if op == CLEAR:
                 if self.frozen:
-                    continue          # заставка идёт — фон не трогаем
+                    self.pending_clear = True   # применим, когда партия кончится
+                    continue
                 cleared = True
                 self.pkts = []
                 self.done = 0
