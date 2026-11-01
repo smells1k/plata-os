@@ -40,11 +40,7 @@ void bootScreen() {
 
   /* ── 3. имя ── */
   delay(80);
-#if USE_USB_DISPLAY
-  tft.bigText(cx, 196, C_WHITE, 22, "ПЛАТА-ОС");          /* центр */
-#else
-  tft.bigText(26, 196, C_WHITE, 22, "ПЛАТА-ОС");
-#endif
+  textCenter(198, "ПЛАТА-ОС", F_LG, C_WHITE);
   textCenter(240, ("сборка " + String(OS_VER) + " · " + String(OS_CH)).c_str(), F_SM, C_DIM);
 
   /* ── 4. полоса загрузки ── */

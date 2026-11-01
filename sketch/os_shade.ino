@@ -44,7 +44,7 @@ static int shadeNotes(const char **out, uint16_t *cols, int max) {
 /* раскладка — считаем один раз, чтобы касания точно совпадали с картинкой */
 struct ShadeBox { int y, h; const char *name; };
 
-int shClose = SH_Y, shBright = 0, shVol = 0, shTiles = 0, shBottom = SCR_H - 34;
+int shClose = SH_Y, shBright = 0, shVol = 0, shNotes = 0, shBottom = SCR_H - 34;
 
 void drawShade() {
   /* фон — обычный экран, сверху шторка */
@@ -76,35 +76,27 @@ void drawShade() {
   barDraw(16, y + 24, SCR_W - 32, 14, pcVol, pcMuted ? C_ERR : C_ACC);
   shVol = y + 22; y += 50;
 
-  /* ── плитки 3×2 ── */
-  const char *names[6] = { "Свет", "Часы", "Игры", "Настр.", "Обновл.", "ПК" };
-  shTiles = y;
-  for (int i = 0; i < 6; i++) {
-    int c = i % 3, r = i / 3;
-    int x = 8 + c * 78, yy = y + r * 48;
-    bool on = (i == 0 && ledR + ledG + ledB > 0) || (i == 5 && pcHost.length());
-    shadeItem(x, yy, 74, names[i],
-              i == 0 ? (String("ярк ") + ledBri).c_str()
-                     : (i == 5 ? (pcHost.length() ? "на связи" : "нет связи")
-                               : (i == 1 ? (wifiOk ? "сеть есть" : "нет сети")
-                                         : (i == 4 ? (updNew ? "есть новая" : "свежая")
-                                                   : "открыть"))),
-              on, i == 5 ? C_OK : C_ACC);
-  }
-  y += 100;
-
   /* ── уведомления ── */
-  textDraw(8, y, "УВЕДОМЛЕНИЯ", F_SM, C_DIM);
-  y += 16;
-  const char *notes[4];
-  uint16_t ncol[4];
-  int n = shadeNotes(notes, ncol, 4);
-  for (int i = 0; i < n && y < SCR_H - 40; i++) {
-    box(8, y, SCR_W - 16, 26, C_PANEL, C_LINE, 5);
-    tft.fillCircle(18, y + 13, 3, ncol[i]);
-    textDraw(28, y + 5, textClip(notes[i], SCR_W - 46, F_SM).c_str(), F_SM, C_TXT);
-    y += 30;
+  textDraw(10, y, "УВЕДОМЛЕНИЯ", F_SM, C_DIM);
+  shNotes = y + 18; y += 18;
+  const char *notes[5];
+  uint16_t nc[5];
+  int nn = shadeNotes(notes, nc, 3);
+  for (int i = 0; i < nn; i++) {
+    int yy = y + i * 32;
+    box(8, yy, SCR_W - 16, 28, C_PANEL, C_LINE, 6);
+    tft.fillRoundRect(8, yy, 4, 28, 2, nc[i]);        /* цветная метка слева */
+    textDraw(18, yy + 7, notes[i], F_SM, nc[i]);
   }
+  y += nn * 32;
+
+  /* ── что на связи ── */
+  int ny = y > SCR_H - 86 ? y : SCR_H - 86;
+  box(8, ny, SCR_W - 16, 38, C_PANEL, C_LINE, 6);
+  textDraw(16, ny + 6, wifiOk ? wSsid.c_str() : "нет Wi-Fi", F_SM,
+           wifiOk ? C_TXT : C_ERR);
+  textDraw(16, ny + 21, ("плата " + (boardIp.length() ? boardIp : String("—"))).c_str(),
+           F_SM, C_DIM);
 
   btnDraw(8, SCR_H - 34, SCR_W - 16, 30, "ЗАКРЫТЬ ▲", C_PANEL2, C_TXT, F_MD);
   shBottom = SCR_H - 34;
@@ -114,9 +106,9 @@ void openShade() { shadeOpen = true; go(&SCR_SHADE); }
 void closeShade() { shadeOpen = false; go(&SCR_LAUNCH); }
 
 void shadeTouch(TouchPt t) {
-  /* свернуть: крестик, кнопка внизу, ручка, любой свайп вверх */
-  if (t.y >= shBottom) { closeShade(); return; }
-  if (t.y <= shClose + 20) { closeShade(); return; }
+  if (t.y >= shBottom) { closeShade(); return; }         /* кнопка внизу   */
+  if (t.y <= shClose + 20) { closeShade(); return; }     /* СВЕРНУТЬ ▲    */
+  if (t.x >= SCR_W - 34 && t.y <= STATUS_H) { closeShade(); return; }  /* ручка */
 
   /* яркость экрана */
   if (t.y >= shBright && t.y < shBright + 20) {
@@ -133,14 +125,10 @@ void shadeTouch(TouchPt t) {
     return;
   }
 
-  /* плитки */
-  if (t.y >= shTiles && t.y < shTiles + 96) {
-    int c = (t.x - 8) / 78, r = (t.y - shTiles) / 48;
-    if (c < 0 || c > 2 || r < 0 || r > 1) return;
-    const Screen *dst[6] = { &SCR_LIGHT, &SCR_CLOCK, &SCR_GAMES,
-                             &SCR_SET,   &SCR_UPD,   &SCR_PC };
-    shadeOpen = false;
-    go(dst[r * 3 + c]);
+  /* тап по уведомлению — открыть обновление или настройки */
+  if (t.y >= shNotes && t.y < shNotes + 96) {
+    if (updNew) { shadeOpen = false; go(&SCR_UPD); }
+    else { shadeOpen = false; go(&SCR_SET); }
     return;
   }
 }

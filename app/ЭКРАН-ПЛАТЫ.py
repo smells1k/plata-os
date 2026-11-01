@@ -31,7 +31,7 @@ SCR_W, SCR_H = 240, 320
 BAUD = 460800
 import platform
 IS_WIN = platform.system() == "Windows"
-VERSION = "4.1"
+VERSION = "4.2"
 SYNC = 0xA5
 
 # ── опкоды ─────────────────────────────────────────────────
@@ -805,7 +805,8 @@ class Screen(tk.Tk):
         if op == BTEXT:
             x, y, col, right, px, txt = p["x"], p["y"], p["col"], p["right"], p["px"], p["text"]
             f = self.font(px * s, True)
-            txt = self.cut(txt, f, min((right - x) if right > x else 999, SCR_W - x - 2) * s)
+            room = (right - x) if right > x else (SCR_W - x - 4)
+            txt = self.cut(txt, f, room * s)
             c.create_text(X(x), Y(y) + px * s * 0.38, text=txt, anchor="w",
                           font=f, fill=to_rgb(col), tags="txt")
             return
