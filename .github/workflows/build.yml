@@ -1,0 +1,65 @@
+name: Сборка прошивки
+
+# Собирается сама при push тега вида v10.1
+# и прикрепляет готовый .bin к релизу.
+# Плата потом видит релиз и обновляется по Wi-Fi.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Поставить arduino-cli
+        uses: arduino/setup-arduino-cli@v1
+
+      - name: Ядро ESP32 и библиотеки
+        run: |
+          arduino-cli config init
+          arduino-cli config add board_manager.additional_urls \
+            https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32
+          arduino-cli lib install TFT_eSPI
+          arduino-cli lib install XPT2046_Touchscreen
+
+      - name: Собрать
+        run: |
+          arduino-cli compile \
+            -b esp32:esp32:esp32 \
+            --output-dir out \
+            sketch/
+
+      - name: Проверить, что влезло
+        run: |
+          ls -la out/
+          test -f out/board-os.ino.merged.bin
+          test -f out/board-os.ino.bin
+
+      - name: Переименовать по-человечески
+        run: |
+          cp out/board-os.ino.merged.bin "out/ПЛАТА-ОС.bin"
+          cp out/board-os.ino.bin        "out/ПЛАТА-ОС-для-WiFi.bin"
+          md5sum out/*.bin
+
+      - name: Выложить в релиз
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ПЛАТА-ОС ${{ github.ref_name }}
+          body: |
+            Прошивка ${{ github.ref_name }}.
+
+            **Кабелем:** `ПЛАТА-ОС.bin`, адрес `0x00000`, скорость 460800
+            **По Wi-Fi:** `ПЛАТА-ОС-для-WiFi.bin` — или прямо с платы:
+            Дополнительно → Обновление → Установить с GitHub
+          files: |
+            out/ПЛАТА-ОС.bin
+            out/ПЛАТА-ОС-для-WiFi.bin

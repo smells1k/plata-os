@@ -30,7 +30,7 @@
 
 /* Версия и канал управления. Меняется при каждой пересборке —
    по ней сразу видно, прошита ли новая прошивка. */
-static const char *OS_VER = "10.0";
+static const char *OS_VER = "10.1";
 #if USE_USB_DISPLAY
 static const char *OS_CH = "USB";
 #else
@@ -269,6 +269,8 @@ static void cfgLoad() {
 
 /* ══════════ ЭКРАНЫ ══════════ */
 void drawLauncher();  void launcherTouch(TouchPt);
+void drawUpd();       void updTouch(TouchPt);
+bool otaCheck(bool quiet);  bool otaInstall();
 void otaStart();      void otaTick();
 void drawLight();     void lightTouch(TouchPt);
 void drawClock();     void clockTouch(TouchPt);
@@ -297,6 +299,7 @@ Screen SCR_SET    = { "настр",   drawSet,      setTouch };
 Screen SCR_INFO   = { "инфо",    drawInfo,     infoTouch };
 Screen SCR_GAMES  = { "игры",    drawGames,    gamesTouch };
 Screen SCR_MORE   = { "доп",     drawMore,     moreTouch };
+Screen SCR_UPD    = { "обновл",  drawUpd,      updTouch };
 Screen SCR_TORCH  = { "фонарь",  drawTorch,    torchTouch };
 Screen SCR_SYS    = { "система", drawSys,      sysTouch };
 Screen SCR_REBOOT = { "ребут",   drawReboot,   rebootTouch };

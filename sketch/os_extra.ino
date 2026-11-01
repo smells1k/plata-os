@@ -123,24 +123,7 @@ void moreTouch(TouchPt t) {
   if (i < 0 || i >= MORE_ITEMS) return;
   switch (i) {
     case 0: go(&SCR_TORCH); break;
-    case 1: {                       /* как обновлять по воздуху */
-      tft.fillScreen(C_BG);
-      statusDraw();
-      headline(12, 44, "ОБНОВЛЕНИЕ ПО WI-FI", C_WHITE, 15);
-      if (wifiOk) {
-        textDraw(12, 78, "1. открой в браузере", F_SM, C_DIM);
-        textDraw(12, 94, ("   http://" + boardIp).c_str(), F_SM, C_OK);
-        textDraw(12, 116, "2. выбери ПЛАТА-ОС.bin", F_SM, C_DIM);
-        textDraw(12, 132, "3. нажми Прошить", F_SM, C_DIM);
-        textDraw(12, 158, "провод не нужен", F_SM, C_DIM);
-      } else {
-        textDraw(12, 82, "нужен Wi-Fi", F_MD, C_WARN);
-        textDraw(12, 106, "Настройки → Найти сети", F_SM, C_DIM);
-      }
-      textDraw(12, SCR_H - 26, "вернусь сам через 6 секунд", F_SM, C_DIM);
-      delay(6000);
-      go(&SCR_MORE);
-    } break;
+    case 1: go(&SCR_UPD); break;
     case 2: calibrate(); go(&SCR_SET); break;
     case 3: go(&SCR_REBOOT); break;
     case 4: go(&SCR_SYS); break;
