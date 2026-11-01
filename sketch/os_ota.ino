@@ -12,8 +12,7 @@
 
 static const char *GH_REPO = "smells1k/plata-os";
 
-String   ghTag = "";                    /* версия в последнем релизе */
-String   ghUrl = "";                    /* прямая ссылка на .bin */
+
 String   updMsg = "не проверял";
 uint16_t updCol = C_DIM;
 int      updPct = -1;

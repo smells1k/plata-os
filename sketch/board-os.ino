@@ -30,7 +30,7 @@
 
 /* Версия и канал управления. Меняется при каждой пересборке —
    по ней сразу видно, прошита ли новая прошивка. */
-static const char *OS_VER = "10.1";
+static const char *OS_VER = "10.2";
 #if USE_USB_DISPLAY
 static const char *OS_CH = "USB";
 #else
@@ -74,6 +74,11 @@ String   city = "Хабаровск";
 
 String   boardIp = "";
 bool     wifiOk = false;
+bool     updNew = false;           /* на GitHub лежит версия новее */
+String   updTag = "";              /* какая именно */
+String   ghTag = "";               /* версия в последнем релизе GitHub */
+String   ghUrl = "";               /* прямая ссылка на .bin */
+uint32_t updLast = 0;              /* когда проверяли, millis() */
 
 int      rssiVal = 0;
 String   weatherT = "—", weatherC = "";
@@ -475,7 +480,10 @@ void drawLauncher() {
   }
 
   /* нижняя подсказка */
-  textDraw(8, SCR_H - 16, "нажми плитку", F_SM, C_DIM);
+  if (updNew && updTag.length())
+    textCenter(SCR_H - 16, ("↑ есть " + updTag + " · Дополнительно").c_str(), F_SM, C_OK);
+  else
+    textDraw(8, SCR_H - 16, "нажми плитку", F_SM, C_DIM);
 }
 
 void launcherTouch(TouchPt t) {
@@ -1312,6 +1320,21 @@ static void usbCommands() {
 
 void loop() {
   otaTick();
+
+  /* раз в 6 часов смотрим, не выложили ли новее */
+  if (wifiOk && (updLast == 0 || millis() - updLast > 6UL * 3600UL * 1000UL)) {
+    static uint32_t firstAt = 0;
+    if (firstAt == 0) firstAt = millis() ? millis() : 1;
+    if (millis() - firstAt > 8000UL) {
+      updLast = millis();
+      if (otaCheck(true) && ghTag.length() > 0 &&
+          verNum(ghTag) > verNum(OS_VER) + 0.001f) {
+        updNew = true;
+        updTag = ghTag;
+        if (curScreen == &SCR_LAUNCH) go(&SCR_LAUNCH);   /* перерисовать */
+      }
+    }
+  }
   ledTick();
 #if USE_USB_DISPLAY
   usbCommands();
