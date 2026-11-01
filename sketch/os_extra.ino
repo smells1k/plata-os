@@ -297,9 +297,11 @@ void drawGames() {
     textDraw(38, y + 9, items[i], F_SM, C_TXT);
     if (i < GM_ITEMS - 1) textRight(SCR_W - 22, y + 9, "›", F_MD, C_DIM);
   }
+  textCenter(SCR_H - 16, "выход — «‹» слева сверху", F_SM, C_DIM);
 }
 
 void gamesTouch(TouchPt t) {
+  if (topBackHit(t)) { go(&SCR_LAUNCH); return; }
   int i = (t.y - GM_TOP) / GM_STEP;
   if (i < 0 || i >= GM_ITEMS) return;
   switch (i) {
@@ -333,6 +335,7 @@ void drawGuess() {
 }
 
 void guessTouch(TouchPt t) {
+  if (topBackHit(t)) { go(&SCR_GAMES); return; }
   if (t.y >= SCR_H - 38) { go(&SCR_GAMES); return; }
   int i = (t.y - 78) / 33;
   if (t.y < 78 || i < 0 || i > 5) return;

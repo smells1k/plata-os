@@ -30,7 +30,7 @@
 
 /* Версия и канал управления. Меняется при каждой пересборке —
    по ней сразу видно, прошита ли новая прошивка. */
-static const char *OS_VER = "12.2";
+static const char *OS_VER = "12.3";
 #if USE_USB_DISPLAY
 static const char *OS_CH = "USB";
 #else
@@ -500,6 +500,16 @@ void drawLauncher() {
     textDraw(cx + (TL_W - tw) / 2, cy + TL_H - 17, names[i], F_SM, C_TXT);
   }
 
+  /* полоска под плитками: цвет диода прямо сейчас */
+  {
+    int y = TL_Y0 + 2 * (TL_H + TL_GY) - TL_GY + 4;
+    uint16_t cur = ledLit ? rgb565(ledR, ledG, ledB) : C_PANEL;
+    tft.fillRoundRect(8, y, 14, 14, 3, cur);
+    tft.drawRoundRect(8, y, 14, 14, 3, C_LINE);
+    textDraw(28, y + 1, ledLit ? (String("диод ") + ledR + "," + ledG + "," + ledB).c_str()
+                               : "диод выключен", F_SM, C_DIM);
+  }
+
   /* нижняя подсказка */
   if (updNew && updTag.length())
     textCenter(SCR_H - 16, ("↑ есть " + updTag + " · Дополнительно").c_str(), F_SM, C_OK);
@@ -521,10 +531,6 @@ void launcherTouch(TouchPt t) {
 
 
 /* ══════════ ПОДСВЕТКА ══════════ */
-static const uint16_t SW_C[6] = { 0x0010, 0xC000, 0x0340, 0xB200, 0x6000, 0x0841 };
-static const uint8_t  SW_R[6] = { 0, 200, 0, 180, 120, 0 };
-static const uint8_t  SW_G[6] = { 40, 20, 150, 100, 0, 0 };
-static const uint8_t  SW_B[6] = { 180, 20, 60, 0, 160, 0 };
 
 void drawLight() {
   topBack("ПОДСВЕТКА", 18);
@@ -540,15 +546,18 @@ void drawLight() {
   textDraw(104, 104, ("G " + String(ledG)).c_str(), F_SM, C_OK);
   textDraw(104, 120, ("B " + String(ledB)).c_str(), F_SM, C_ACC);
 
-  /* ── три ползунка ── */
-  const char *nm[3] = { "КРАСНЫЙ", "ЗЕЛЁНЫЙ", "СИНИЙ" };
+  /* ── три ползунка: полоса в цвете самого канала ── */
+  const char *nm[3] = { "К", "З", "С" };
   uint8_t val[3] = { ledR, ledG, ledB };
-  uint16_t col[3] = { C_ERR, C_OK, C_ACC };
   for (int i = 0; i < 3; i++) {
     int y = 142 + i * 34;
-    textDraw(10, y, nm[i], F_SM, C_DIM);
+    /* цвет канала — без примесей, чтобы не путаться */
+    uint16_t chCol = (i == 0) ? rgb565(val[i], 0, 0)
+                   : (i == 1) ? rgb565(0, val[i], 0)
+                              : rgb565(0, 0, val[i]);
+    textDraw(10, y, nm[i], F_SM, (i == 0) ? C_ERR : (i == 1) ? C_OK : C_ACC);
     textRight(SCR_W - 10, y, String(val[i]).c_str(), F_SM, C_TXT);
-    barDraw(10, y + 15, SCR_W - 20, 12, val[i] * 100 / 255, col[i]);
+    barDraw(10, y + 15, SCR_W - 20, 12, val[i] * 100 / 255, chCol);
     lightBarY[i] = y + 15;
   }
 

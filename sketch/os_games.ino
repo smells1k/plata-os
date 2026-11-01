@@ -140,11 +140,13 @@ void drawDice() {
   box(30, 70, 180, 150, C_PANEL, C_LINE, 12);
   headline(90, 120, diceOut.c_str(), C_WHITE, 44);
   btnDraw(10, SCR_H - 90, SCR_W - 20, 36, "БРОСИТЬ", C_ACC, C_WHITE, F_MD);
+  btnDraw(10, SCR_H - 44, SCR_W - 20, 34, "НАЗАД В ИГРЫ", C_PANEL, C_TXT, F_SM);
 }
 
 void diceTouch(TouchPt t) {
+  if (topBackHit(t)) { go(&SCR_GAMES); return; }
   if (t.y >= SCR_H - 44) { go(&SCR_GAMES); return; }
-  if (t.y >= SCR_H - 90) {
+  if (t.y >= SCR_H - 90 && t.y < SCR_H - 50) {
     for (int i = 0; i < 8; i++) {
       neopixelWrite(RGB_PIN, 40 + i * 25, 40, 200);
       delay(70);
@@ -168,11 +170,13 @@ void drawCoin() {
   tft.drawCircle(120, 145, 46, C_LINE);
   headline(78, 132, coinOut.c_str(), C_WHITE, 22);
   btnDraw(10, SCR_H - 90, SCR_W - 20, 36, "БРОСИТЬ", C_ACC, C_WHITE, F_MD);
+  btnDraw(10, SCR_H - 44, SCR_W - 20, 34, "НАЗАД В ИГРЫ", C_PANEL, C_TXT, F_SM);
 }
 
 void coinTouch(TouchPt t) {
+  if (topBackHit(t)) { go(&SCR_GAMES); return; }
   if (t.y >= SCR_H - 44) { go(&SCR_GAMES); return; }
-  if (t.y >= SCR_H - 90) {
+  if (t.y >= SCR_H - 90 && t.y < SCR_H - 50) {
     for (int i = 0; i < 10; i++) {
       neopixelWrite(RGB_PIN, i % 2 ? 200 : 0, i % 2 ? 160 : 0, i % 2 ? 0 : 200);
       delay(70);
@@ -233,6 +237,7 @@ static void simonStart() {
 }
 
 void simonTouch(TouchPt t) {
+  if (topBackHit(t)) { go(&SCR_GAMES); return; }
   if (t.y >= SCR_H - 38) {
     if (t.x < 120) simonStart();
     else go(&SCR_GAMES);
