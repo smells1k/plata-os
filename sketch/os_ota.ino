@@ -67,7 +67,7 @@ bool otaCheck(bool quiet = false) {
   int code = h.GET();
   if (code != 200) {
     h.end();
-    updMsg = code == 404 ? "релизов пока нет" : ("GitHub ответил " + String(code));
+    updMsg = (code == 404) ? "релизов пока нет" : ("GitHub ответил " + String(code));
     updCol = C_WARN;
     return false;
   }
@@ -94,7 +94,7 @@ bool otaCheck(bool quiet = false) {
   }
 
   if (!ghTag.length()) {
-    updMsg = "релизов пока нет";
+    updMsg = "на GitHub нет релиза";
     updCol = C_WARN;
     return false;
   }
@@ -169,7 +169,7 @@ bool otaInstall() {
     if (!otaCheck()) { drawUpd(); return false; }
   }
   if (!ghUrl.length()) {
-    updMsg = "в релизе нет файла";
+    updMsg = "в релизе нет .bin";
     updCol = C_ERR;
     drawUpd();
     return false;
@@ -273,15 +273,19 @@ void drawUpd() {
   textRight(SCR_W - 18, 88, ghTag.length() ? ghTag.c_str() : "—", F_MD,
             ghTag.length() ? C_ACC : C_DIM);
 
-  textCenter(126, textClip(updMsg, SCR_W - 20, F_SM).c_str(), F_SM, updCol);
+  textCenter(124, textClip(updMsg, SCR_W - 20, F_SM).c_str(), F_SM, updCol);
 
   /* полоса прогресса */
   int w = SCR_W - 60;
-  tft.drawRect(30, 176, w, 24, C_LINE);
-  if (updPct > 0) tft.fillRect(32, 178, (w - 4) * updPct / 100, 20, C_ACC);
-  if (updPct >= 0) textCenter(210, (String(updPct) + "%").c_str(), F_MD, C_TXT);
-  else textCenter(238, wifiOk ? "один файл: и для кабеля, и для воздуха" : "нужен Wi-Fi",
-                  F_SM, C_DIM);
+  tft.drawRect(30, 148, w, 24, C_LINE);
+  if (updPct > 0) tft.fillRect(32, 150, (w - 4) * updPct / 100, 20, C_ACC);
+  if (updPct >= 0) textCenter(182, (String(updPct) + "%").c_str(), F_MD, C_TXT);
+  else textCenter(180, wifiOk ? "один файл — и для кабеля, и для воздуха"
+                              : "нужен Wi-Fi", F_SM, C_DIM);
+
+  /* прямая ссылка: видно, куда плата стучится */
+  textCenter(212, "плата качает с GitHub", F_SM, C_DIM);
+  textCenter(230, GH_REPO, F_SM, C_ACC);
 
   btnDraw(10, SCR_H - 68, SCR_W - 20, 30, "Проверить обновление", C_PANEL, C_TXT, F_SM);
   btnDraw(10, SCR_H - 34, SCR_W - 20, 30, "Установить с GitHub", C_ACC, C_WHITE, F_SM);
