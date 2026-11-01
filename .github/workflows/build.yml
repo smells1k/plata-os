@@ -46,9 +46,11 @@ jobs:
 
       - name: Переименовать по-человечески
         run: |
-          cp out/board-os.ino.merged.bin "out/ПЛАТА-ОС.bin"
-          cp out/board-os.ino.bin        "out/ПЛАТА-ОС-для-WiFi.bin"
-          md5sum out/*.bin
+          # имена латиницей: GitHub вырезает кириллицу из имён ассетов
+          cp out/board-os.ino.bin        out/plata-os-app.bin
+          cp out/board-os.ino.merged.bin out/plata-os-full.bin
+          md5sum out/plata-os-*.bin
+          ls -la out/plata-os-*.bin
 
       - name: Выложить в релиз
         uses: softprops/action-gh-release@v2
@@ -57,9 +59,13 @@ jobs:
           body: |
             Прошивка ${{ github.ref_name }}.
 
-            **Кабелем:** `ПЛАТА-ОС.bin`, адрес `0x00000`, скорость 460800
-            **По Wi-Fi:** `ПЛАТА-ОС-для-WiFi.bin` — или прямо с платы:
+            **Кабелем:** `plata-os-full.bin`, адрес `0x00000`, скорость 460800
+            **По Wi-Fi:** `plata-os-app.bin` — или прямо с платы:
             Дополнительно → Обновление → Установить с GitHub
+
+            Плата сама берёт `plata-os-app.bin` из последнего релиза
+            и ставит во второй раздел. Старая прошивка остаётся на месте,
+            пока новая не запустится.
           files: |
-            out/ПЛАТА-ОС.bin
-            out/ПЛАТА-ОС-для-WiFi.bin
+            out/plata-os-app.bin
+            out/plata-os-full.bin

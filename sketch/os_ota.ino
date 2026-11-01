@@ -90,7 +90,11 @@ bool otaCheck(bool quiet = false) {
     int q = body.indexOf('"', a + 1);
     if (q < 0) break;
     String u = body.substring(a + 1, q);
-    if (u.endsWith(".bin")) { ghUrl = u; break; }
+    if (u.endsWith(".bin")) {
+      /* сначала ищем маленький образ для OTA — полный в слот не влезет */
+      if (u.indexOf("-app.bin") > 0) { ghUrl = u; break; }
+      if (!ghUrl.length()) ghUrl = u;
+    }
     i = q;
   }
 
@@ -161,6 +165,13 @@ bool otaInstall() {
   if (len <= 0) {
     h.end();
     updMsg = "не знаю размер файла";
+    updCol = C_ERR;
+    drawUpd();
+    return false;
+  }
+  if (len > 1400000) {                     /* больше раздела приложения */
+    h.end();
+    updMsg = "файл великоват: " + String(len / 1024) + " КБ";
     updCol = C_ERR;
     drawUpd();
     return false;
