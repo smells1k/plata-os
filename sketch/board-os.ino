@@ -30,7 +30,7 @@
 
 /* Версия и канал управления. Меняется при каждой пересборке —
    по ней сразу видно, прошита ли новая прошивка. */
-static const char *OS_VER = "16.8";
+static const char *OS_VER = "16.9";
 /* CS экрана = D2, DC = D4 (см. User_Setup.h) */
 #if USE_USB_DISPLAY
 static const char *OS_CH = "USB";
@@ -1416,12 +1416,12 @@ void setup() {
   tft.init();
   delay(120);
   tft.init();
-  tft.setRotation(0);
+  tft.setRotation(2);        /* разворот 180° */
   tft.fillScreen(C_BG);
 
   SPI.begin(18, 19, 23, -1);       /* SCK 18 · MO 23 — как подписано на плате */
   ts.begin();
-  ts.setRotation(0);
+  ts.setRotation(2);         /* тач вместе с экраном */
 #endif
 
 #if USE_USB_DISPLAY
