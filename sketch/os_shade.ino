@@ -79,7 +79,7 @@ bool swipeDone() {
   return false;                                 /* это было обычное нажатие */
 }
 
-int shClose = SH_Y, shBright = 0, shVol = 0, shNotes = 0, shBottom = SCR_H - 34;
+int shClose = SH_Y, shBright = 0, shVol = 0, shNotes = 0, shNote = 0, shBottom = SCR_H - 34;
 
 void drawShade() {
   /* фон — обычный экран, сверху шторка */
@@ -114,6 +114,15 @@ void drawShade() {
   btnDraw(160, y + 24, 66, 26, pcMuted ? "звук" : "мут",
           pcMuted ? C_ERR : C_PANEL2, C_TXT, F_SM);
   shVol = y + 24; y += 64;
+
+  /* ── заметка: последняя строка прямо в шторке ── */
+  box(8, y, SCR_W - 16, 34, C_PANEL, C_LINE, 6);
+  tft.fillRoundRect(8, y, 3, 34, 1, 0xFBE0);
+  textDraw(18, y + 3, "ЗАМЕТКА", F_SM, C_DIM);
+  textDraw(18, y + 18, noteLines() ? textClip(noteLine(0), SCR_W - 44, F_SM).c_str()
+                                   : "пусто — нажми", F_SM,
+           noteLines() ? C_TXT : C_DIM);
+  shNote = y; y += 40;
 
   /* ── уведомления ── */
   textDraw(10, y, "УВЕДОМЛЕНИЯ", F_SM, C_DIM);
@@ -163,6 +172,13 @@ void shadeTouch(TouchPt t) {
     else if (t.x < 160) { pcDo("vol_up");   pcVol = min(100, pcVol + 5); }
     else                { pcDo("mute");     pcMuted = !pcMuted; }
     drawShade();
+    return;
+  }
+
+  /* заметка — открыть */
+  if (shNote && t.y >= shNote && t.y < shNote + 34) {
+    shadeOpen = false;
+    go(&SCR_NOTE);
     return;
   }
 

@@ -30,7 +30,7 @@
 
 /* Версия и канал управления. Меняется при каждой пересборке —
    по ней сразу видно, прошита ли новая прошивка. */
-static const char *OS_VER = "15.1";
+static const char *OS_VER = "15.2";
 #if USE_USB_DISPLAY
 static const char *OS_CH = "USB";
 #else
@@ -87,6 +87,7 @@ uint32_t wifiDown = 0;             /* с какого момента нет се
 bool     otaOn    = false;         /* приёмник обновлений поднят */
 
 int      rssiVal = 0;
+int      g_noteY = 0;              /* где виджет заметки на столе */
 String   weatherT = "—", weatherC = "";
 uint32_t weatherAt = 0;
 
@@ -402,6 +403,7 @@ void drawUpd();       void updTouch(TouchPt);
 void drawShade();     void shadeTouch(TouchPt);
 void drawCalibScreen(); void calTouch(TouchPt); void calibTick();
 void drawNote();      void noteTouch(TouchPt);
+int  noteLines();     String noteLine(int i);
 void drawLog();       void logTouch(TouchPt);
 void drawLock();      void lockTouch(TouchPt);  void lockNow();
 void logAdd(const char *what);  void logSave();  void logLoad();
@@ -601,10 +603,10 @@ static void iconDraw(int kind, int cx, int cy, uint16_t col) {
       tft.fillRect(cx - 7, cy - 1, 14, 3, col);
       tft.fillRect(cx - 1, cy - 7, 3, 14, col);
       break;
-    case 7:                              /* заметка: листок */
-      tft.drawRoundRect(cx - 9, cy - 11, 18, 22, 3, col);
-      for (int i = 0; i < 3; i++)
-        tft.fillRect(cx - 5, cy - 5 + i * 6, 10, 2, col);
+    case 7:                              /* питание: кружок с чертой */
+      tft.drawCircle(cx, cy + 2, 9, col);
+      tft.drawCircle(cx, cy + 2, 8, col);
+      tft.fillRect(cx - 2, cy - 12, 4, 12, col);
       break;
   }
 }
@@ -620,8 +622,8 @@ void drawLauncher() {
   textRight(SCR_W - 8, 26, OS_VER, F_SM, C_DIM);
 #endif
 
-  const char *names[8] = { "Свет", "Часы", "ПК", "Игры", "Настр.", "Инфо", "Доп.", "Заметка" };
-  uint16_t acc[8] = { 0xFBE0, 0x2D7F, 0x3666, 0xC986, 0x6B4D, 0x8010, 0x4A69, 0xFBE0 };
+  const char *names[8] = { "Свет", "Часы", "ПК", "Игры", "Настр.", "Инфо", "Доп.", "Питание" };
+  uint16_t acc[8] = { 0xFBE0, 0x2D7F, 0x3666, 0xC986, 0x6B4D, 0x8010, 0x4A69, 0xE8A4 };
 
   for (int i = 0; i < 8; i++) {
     int col = i % 4, row = i / 4;
@@ -645,6 +647,23 @@ void drawLauncher() {
                                : "диод выключен", F_SM, C_DIM);
   }
 
+  /* ── виджет заметки: последние строки прямо на столе ── */
+  {
+    int wy = 236, wh = 54;
+    tft.fillRoundRect(8, wy, SCR_W - 16, wh, 8, C_PANEL);
+    tft.drawRoundRect(8, wy, SCR_W - 16, wh, 8, C_LINE);
+    tft.fillRoundRect(8, wy, 4, wh, 2, 0xFBE0);        /* метка цвета */
+    textDraw(20, wy + 5, "ЗАМЕТКА", F_SM, C_DIM);
+    textRight(SCR_W - 16, wy + 5, noteLines() ? "нажми" : "пусто", F_SM, C_DIM);
+    if (noteLines()) {
+      String l1 = noteLine(0);
+      textDraw(20, wy + 22, textClip(l1, SCR_W - 40, F_SM).c_str(), F_SM, C_TXT);
+      if (noteLines() > 1)
+        textDraw(20, wy + 36, textClip(noteLine(1), SCR_W - 40, F_SM).c_str(), F_SM, C_DIM);
+    }
+    g_noteY = wy;
+  }
+
   /* нижняя подсказка */
   if (updNew && updTag.length())
     textCenter(SCR_H - 16, ("↑ есть " + updTag + " · Дополнительно").c_str(), F_SM, C_OK);
@@ -660,7 +679,7 @@ void launcherTouch(TouchPt t) {
   if (t.x - TL_X0 - col * (TL_W + TL_GX) > TL_W) return;
   if (t.y - TL_Y0 - row * (TL_H + TL_GY) > TL_H) return;
   const Screen *all[8] = { &SCR_LIGHT, &SCR_CLOCK, &SCR_PC, &SCR_GAMES,
-                           &SCR_SET, &SCR_INFO, &SCR_MORE, &SCR_NOTE };
+                           &SCR_SET, &SCR_INFO, &SCR_MORE, &SCR_POWER };
   go(all[row * 4 + col]);
 }
 
@@ -1432,13 +1451,13 @@ void calibTick() {
 }
 
 void calTouch(TouchPt t) {
-  if (topBackHit(t)) { calStep = -1; go(&SCR_SET); return; }
+  if (topBackHit(t)) { calStep = -1; go(&SCR_MORE); return; }
   if (calStep < 0) {
     if (t.y >= 190 && t.y < 226) { calStep = 0; go(&SCR_CAL); return; }
-    if (t.y >= 236 && t.y < 270) { go(&SCR_SET); return; }
+    if (t.y >= 236 && t.y < 270) { go(&SCR_MORE); return; }
     return;
   }
-  if (t.y >= SCR_H - 34) { calStep = -1; go(&SCR_SET); return; }   /* прервать */
+  if (t.y >= SCR_H - 34) { calStep = -1; go(&SCR_MORE); return; }   /* прервать */
 }
 
 /* ══════════ SETUP / LOOP ══════════ */

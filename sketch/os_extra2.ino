@@ -3,6 +3,17 @@
 
 String noteText = "";
 
+/* сколько строк и что в строке — для виджета на столе */
+int noteLines() {
+  if (!noteText.length()) return 0;
+  return noteText.indexOf('\n') >= 0 ? 2 : 1;
+}
+String noteLine(int i) {
+  int nl = noteText.indexOf('\n');
+  if (i == 0) return nl >= 0 ? noteText.substring(0, nl) : noteText;
+  return nl >= 0 ? noteText.substring(nl + 1) : String("");
+}
+
 void drawNote() {
   topBack("ЗАМЕТКА", 18);
 
