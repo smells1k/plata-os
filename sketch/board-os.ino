@@ -30,7 +30,7 @@
 
 /* Версия и канал управления. Меняется при каждой пересборке —
    по ней сразу видно, прошита ли новая прошивка. */
-static const char *OS_VER = "16.3";
+static const char *OS_VER = "16.4";
 #if USE_USB_DISPLAY
 static const char *OS_CH = "USB";
 #else
@@ -44,11 +44,11 @@ Preferences cfg;
 #define PIN_TFT_RST   4
 #define PIN_BL        32
 #define PIN_TOUCH_CS  33
-#define PIN_TOUCH_IRQ 36
 #define RGB_PIN       5
 #define BTN_PIN       27
 
-XPT2046_Touchscreen ts(PIN_TOUCH_CS, PIN_TOUCH_IRQ);
+/* тач только по CS: T_IRQ подключать не обязательно — плата опрашивает шину */
+XPT2046_Touchscreen ts(PIN_TOUCH_CS);
 
 int T_RAW_X0 = 300, T_RAW_X1 = 3800, T_RAW_Y0 = 300, T_RAW_Y1 = 3800;
 
