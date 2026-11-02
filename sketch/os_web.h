@@ -41,8 +41,8 @@ static String webPage() {
   h += F("border:1px solid #1f2630;font-size:12.5px;color:#8b949e;min-height:42px}");
   h += F("</style></head><body>");
   h += F("<h1><span class=dot id=dot></span>ПЛАТА-ОС</h1>");
-  h += "<div class=sub>сборка " + String(OS_VER) + " · " +
-       (wifiOk ? boardIp : String("нет Wi-Fi")) + "</div>";
+  h += "<div class=sub>сборка " + String(OS_VER) + " · пульт " + apIp +
+       (wifiOk ? (" · ПК " + boardIp) : String(" · домашней сети нет")) + "</div>";
 
   /* плата */
   h += F("<h2>ПЛАТА</h2><div class=g>");

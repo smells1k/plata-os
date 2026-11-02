@@ -30,7 +30,7 @@
 
 /* Версия и канал управления. Меняется при каждой пересборке —
    по ней сразу видно, прошита ли новая прошивка. */
-static const char *OS_VER = "15.7";
+static const char *OS_VER = "16.0";
 #if USE_USB_DISPLAY
 static const char *OS_CH = "USB";
 #else
@@ -75,6 +75,7 @@ String   city = "Хабаровск";
 String   boardIp = "";
 bool     wifiOk = false;
 bool     apMode = false;   /* работаем своей точкой доступа */
+String   apIp = "192.168.4.1";
 bool     shadeOpen = false;
 int      lightBarY[3] = { 153, 185, 217 };   /* где ползунки R/G/B */
 int      lightBarBri  = 262;                 /* где ползунок яркости */
@@ -364,6 +365,7 @@ Screen SCR_GUESS  = { "угадай",  drawGuess,    guessTouch };
 
 void wifiDialog();
 void wifiConnect(bool showProgress);
+static void showNetScreen();
 void calibrate();
 void sendWol();
 void pcCmdUsb(const char *cmd);
@@ -418,7 +420,7 @@ static void statusDraw() {
   textDraw(6, 5, timeStr().c_str(), F_SM, wifiOk ? C_TXT : C_DIM);
 
   /* справа — точки Wi-Fi */
-  if (wifiOk) {
+  if (wifiOk || apMode) {
     int bars = rssiVal > -60 ? 4 : rssiVal > -72 ? 3 : 2;
     int wx = SCR_W - 58, wy = 15;
     for (int i = 0; i < 4; i++) {
@@ -567,7 +569,9 @@ void drawLauncher() {
   if (updNew && updTag.length())
     textCenter(SCR_H - 16, ("↑ есть " + updTag + " · Дополнительно").c_str(), F_SM, C_OK);
   else if (apMode)
-    textDraw(8, SCR_H - 16, "сеть esp32_flasher · 192.168.4.1", F_SM, C_ACC);
+    textDraw(8, SCR_H - 16,
+             (String("пульт: 192.168.4.1") + (wifiOk ? " · ПК доступен" : "")).c_str(),
+             F_SM, C_ACC);
   else
     textDraw(8, SCR_H - 16, "нажми плитку", F_SM, C_DIM);
 }
@@ -1183,48 +1187,42 @@ void wifiDialog() {
 }
 
 void wifiConnect(bool showProgress) {
-  if (!wSsid.length()) return;
   if (showProgress) {
     tft.fillScreen(C_BG);
     statusDraw();
-    textCenter(120, "подключаюсь…", F_MD, C_TXT);
-    textCenter(146, textClip(wSsid, SCR_W - 30, F_SM).c_str(), F_SM, C_DIM);
+    textCenter(120, "поднимаю сеть…", F_MD, C_TXT);
   }
-  WiFi.mode(WIFI_STA);
-  WiFi.setAutoReconnect(true);          /* сам вернётся, если сеть пропала */
+
+  /* ── ВСЕГДА раздаём свою сеть ──
+     телефон подключается к ней и открывает 192.168.4.1.
+     одновременно плата сидит в домашней сети (AP+STA),
+     поэтому команды для ПК доходят до компьютера. */
+  WiFi.mode(WIFI_AP_STA);
+  delay(120);
+  WiFi.softAP("esp32_flasher", "12345678");
+  apIp = WiFi.softAPIP().toString();
+  apMode = true;
+
+  if (!wSsid.length()) {
+    wifiOk = false;
+    boardIp = "";
+    if (showProgress) showNetScreen();
+    return;
+  }
+
+  WiFi.setAutoReconnect(true);
   WiFi.begin(wSsid.c_str(), wPass.c_str());
   uint32_t t0 = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - t0 < 15000) {
+  while (WiFi.status() != WL_CONNECTED && millis() - t0 < 12000) {
     delay(250);
-    if (showProgress) {
-      int p = (millis() - t0) * 100 / 15000;
+    if (showProgress && (millis() - t0) % 1000 < 250) {
+      int p = (millis() - t0) * 100 / 12000;
       barDraw(30, 180, SCR_W - 60, 14, p, C_ACC);
     }
   }
-  wifiOk = (WiFi.status() == WL_CONNECTED);
 
-  /* домашняя сеть не ответила — поднимаем свою точку доступа.
-     Телефон подключается к «PLATA-OS», адрес всегда 192.168.4.1 */
-  if (!wifiOk) {
-    WiFi.mode(WIFI_AP_STA);
-    delay(100);
-    WiFi.softAP("esp32_flasher", "12345678");
-    boardIp = WiFi.softAPIP().toString();
-    apMode = true;
-    if (showProgress) {
-      tft.fillScreen(C_BG);
-      statusDraw();
-      textCenter(96, "своя сеть", F_LG, C_ACC);
-      textCenter(128, "esp32_flasher", F_MD, C_TXT);
-      textCenter(152, "пароль: 12345678", F_SM, C_DIM);
-      textCenter(184, "открой в телефоне", F_SM, C_DIM);
-      textCenter(206, "192.168.4.1", F_MD, C_OK);
-      delay(2600);
-    }
-    return;
-  }
-  apMode = false;
-  {
+  wifiOk = (WiFi.status() == WL_CONNECTED);
+  if (wifiOk) {
     boardIp = WiFi.localIP().toString();
     rssiVal = WiFi.RSSI();
     configTime(0, 0, "pool.ntp.org", "time.google.com");
@@ -1232,23 +1230,37 @@ void wifiConnect(bool showProgress) {
     tzset();
     MDNS.begin("board-os");
     delay(30);
-    pcAutoIp();                    /* сам найдёт агент в этой же сети */
+    pcAutoIp();
     weatherFetch();
+  } else {
+    boardIp = "";
   }
-  if (showProgress) {
-    tft.fillScreen(C_BG);
-    statusDraw();
-    if (wifiOk) {
-      textCenter(120, "ПОДКЛЮЧЕНО", F_MD, C_OK);
-      textCenter(150, boardIp.c_str(), F_MD, C_TXT);
-      textCenter(185, "открой этот адрес", F_SM, C_DIM);
-      textCenter(205, "в браузере телефона", F_SM, C_DIM);
-    } else {
-      textCenter(120, "не вышло", F_MD, C_ERR);
-      textCenter(150, "проверь пароль и 2.4 ГГц", F_SM, C_DIM);
-    }
-    delay(1800);
-  }
+  if (showProgress) showNetScreen();
+}
+
+/* экран после подключения: два адреса — своя сеть и домашняя */
+static void showNetScreen() {
+  tft.fillScreen(C_BG);
+  statusDraw();
+
+  textCenter(52, "ПЛАТА РАЗДАЁТ СЕТЬ", F_MD, C_ACC);
+
+  box(10, 74, SCR_W - 20, 62, C_PANEL, C_ACC, 8);
+  textDraw(20, 80, "с телефона:", F_SM, C_DIM);
+  textDraw(20, 96, "Wi-Fi  esp32_flasher", F_MD, C_TXT);
+  textDraw(20, 116, "192.168.4.1", F_MD, C_OK);
+
+  box(10, 146, SCR_W - 20, 62, C_PANEL, wifiOk ? C_OK : C_LINE, 8);
+  textDraw(20, 152, "домашняя сеть:", F_SM, C_DIM);
+  textDraw(20, 168, wifiOk ? wSsid.c_str() : "не подключена", F_MD,
+           wifiOk ? C_TXT : C_WARN);
+  textDraw(20, 188, wifiOk ? boardIp.c_str() : "команды для ПК не дойдут", F_MD,
+           wifiOk ? C_TXT : C_ERR);
+
+  textCenter(232, "пароль сети платы: 12345678", F_SM, C_DIM);
+  textCenter(256, "через её Wi-Fi интернета нет —", F_SM, C_DIM);
+  textCenter(274, "это пульт, а не роутер", F_SM, C_DIM);
+  delay(3200);
 }
 
 /* ══════════ ПОГОДА ══════════ */
