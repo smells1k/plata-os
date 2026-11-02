@@ -30,7 +30,7 @@
 
 /* Версия и канал управления. Меняется при каждой пересборке —
    по ней сразу видно, прошита ли новая прошивка. */
-static const char *OS_VER = "15.2";
+static const char *OS_VER = "15.3";
 #if USE_USB_DISPLAY
 static const char *OS_CH = "USB";
 #else
@@ -74,6 +74,7 @@ String   city = "Хабаровск";
 
 String   boardIp = "";
 bool     wifiOk = false;
+bool     apMode = false;   /* работаем своей точкой доступа */
 bool     shadeOpen = false;
 int      lightBarY[3] = { 153, 185, 217 };   /* где ползунки R/G/B */
 int      lightBarBri  = 262;                 /* где ползунок яркости */
@@ -667,6 +668,8 @@ void drawLauncher() {
   /* нижняя подсказка */
   if (updNew && updTag.length())
     textCenter(SCR_H - 16, ("↑ есть " + updTag + " · Дополнительно").c_str(), F_SM, C_OK);
+  else if (apMode)
+    textDraw(8, SCR_H - 16, "своя сеть PLATA-OS · 192.168.4.1", F_SM, C_ACC);
   else
     textDraw(8, SCR_H - 16, "нажми плитку", F_SM, C_DIM);
 }
@@ -1301,7 +1304,29 @@ void wifiConnect(bool showProgress) {
     }
   }
   wifiOk = (WiFi.status() == WL_CONNECTED);
-  if (wifiOk) {
+
+  /* домашняя сеть не ответила — поднимаем свою точку доступа.
+     Телефон подключается к «PLATA-OS», адрес всегда 192.168.4.1 */
+  if (!wifiOk) {
+    WiFi.mode(WIFI_AP_STA);
+    delay(100);
+    WiFi.softAP("PLATA-OS", "plata1234");
+    boardIp = WiFi.softAPIP().toString();
+    apMode = true;
+    if (showProgress) {
+      tft.fillScreen(C_BG);
+      statusDraw();
+      textCenter(96, "своя сеть", F_LG, C_ACC);
+      textCenter(128, "PLATA-OS", F_MD, C_TXT);
+      textCenter(152, "пароль: plata1234", F_SM, C_DIM);
+      textCenter(184, "открой в телефоне", F_SM, C_DIM);
+      textCenter(206, "192.168.4.1", F_MD, C_OK);
+      delay(2600);
+    }
+    return;
+  }
+  apMode = false;
+  {
     boardIp = WiFi.localIP().toString();
     rssiVal = WiFi.RSSI();
     configTime(0, 0, "pool.ntp.org", "time.google.com");
@@ -1311,8 +1336,6 @@ void wifiConnect(bool showProgress) {
     delay(30);
     pcAutoIp();                    /* сам найдёт агент в этой же сети */
     weatherFetch();
-  } else {
-    boardIp = "";
   }
   if (showProgress) {
     tft.fillScreen(C_BG);
