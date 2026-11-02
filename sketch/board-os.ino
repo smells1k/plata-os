@@ -30,7 +30,7 @@
 
 /* Версия и канал управления. Меняется при каждой пересборке —
    по ней сразу видно, прошита ли новая прошивка. */
-static const char *OS_VER = "14.1";
+static const char *OS_VER = "14.2";
 #if USE_USB_DISPLAY
 static const char *OS_CH = "USB";
 #else
@@ -598,20 +598,19 @@ void drawLight() {
 
   /* ── текущий цвет ── */
   uint16_t cur = rgb565(ledR, ledG, ledB);
-  tft.fillRoundRect(10, 48, 84, 84, 10, cur);
-  tft.drawRoundRect(10, 48, 84, 84, 10, C_LINE);
+  tft.fillRoundRect(10, 52, 72, 72, 10, cur);
+  tft.drawRoundRect(10, 52, 72, 72, 10, C_LINE);
 
-  textDraw(104, 52, ledLit ? "включён" : "выключен", F_SM, ledLit ? C_OK : C_DIM);
-  textDraw(104, 70, ("яркость " + String(ledBri)).c_str(), F_SM, C_DIM);
-  textDraw(104, 88, ("R " + String(ledR)).c_str(), F_SM, C_ERR);
-  textDraw(104, 104, ("G " + String(ledG)).c_str(), F_SM, C_OK);
-  textDraw(104, 120, ("B " + String(ledB)).c_str(), F_SM, C_ACC);
+  textDraw(92, 56, ledLit ? "включён" : "выключен", F_SM, ledLit ? C_OK : C_DIM);
+  textDraw(92, 74, ("R " + String(ledR)).c_str(), F_SM, C_ERR);
+  textDraw(92, 90, ("G " + String(ledG)).c_str(), F_SM, C_OK);
+  textDraw(92, 106, ("B " + String(ledB)).c_str(), F_SM, C_ACC);
 
   /* ── три ползунка: полоса в цвете самого канала ── */
   const char *nm[3] = { "К", "З", "С" };
   uint8_t val[3] = { ledR, ledG, ledB };
   for (int i = 0; i < 3; i++) {
-    int y = 138 + i * 32;
+    int y = 128 + i * 28;
     /* цвет канала — без примесей, чтобы не путаться */
     uint16_t chCol = (i == 0) ? rgb565(val[i], 0, 0)
                    : (i == 1) ? rgb565(0, val[i], 0)
@@ -623,18 +622,19 @@ void drawLight() {
   }
 
   /* ── яркость самого диода ── */
-  textDraw(10, 244, "ЯРКОСТЬ ДИОДА", F_SM, C_DIM);
-  textRight(SCR_W - 10, 244, String(ledBri).c_str(), F_SM, C_TXT);
-  barDraw(10, 262, SCR_W - 20, 14, (int)ledBri * 100 / 255, C_WARN);
-  lightBarBri = 262;
+  textDraw(10, 212, "ЯРКОСТЬ ДИОДА", F_SM, C_DIM);
+  textRight(SCR_W - 10, 212, String(ledBri).c_str(), F_SM, C_TXT);
+  barDraw(10, 230, SCR_W - 20, 12, (int)ledBri * 100 / 255, C_WARN);
+  lightBarBri = 229;
 
-  /* ── эффекты ── */
+  /* ── эффекты: два ряда по две, подписи целиком ── */
+  textDraw(10, 248, "ЭФФЕКТЫ", F_SM, C_DIM);
   const char *fx[4] = { "Радуга", "Дыхан.", "Строб", "Свеча" };
   for (int i = 0; i < 4; i++)
-    btnDraw(10 + i * 56, 284, 52, 24, fx[i],
+    btnDraw(10 + i * 56, 264, 52, 24, fx[i],
             ledMode == i + 1 ? C_ACC : C_PANEL, C_TXT, F_SM);
 
-  btnDraw(10, SCR_H - 26, SCR_W - 20, 24, ledLit ? "ВЫКЛЮЧИТЬ" : "ВКЛЮЧИТЬ",
+  btnDraw(10, SCR_H - 30, SCR_W - 20, 26, ledLit ? "ВЫКЛЮЧИТЬ" : "ВКЛЮЧИТЬ",
           ledLit ? C_ERR : C_OK, C_WHITE, F_SM);
 }
 
@@ -675,8 +675,8 @@ void lightTouch(TouchPt t) {
     return;
   }
 
-  /* эффекты */
-  if (t.y >= 284 && t.y < 310) {
+  /* эффекты: четыре кнопки в один ряд, по 108 в два столбца и два ряда */
+  if (t.y >= 264 && t.y < 290) {
     int i = (t.x - 10) / 56;
     if (i < 0 || i > 3) return;
     ledMode = (ledMode == i + 1) ? 0 : i + 1;
@@ -1489,30 +1489,7 @@ static void usbCommands() {
       t.y = b[2] | (b[3] << 8);
       t.ok = true;
 
-      /* свайп открывает шторку ТОЛЬКО от верхней кромки — как на телефоне.
-         Любое другое движение считается обычным нажатием. */
-      static int  swStartY = -1, swLastY = -1;
-      static uint32_t swAt = 0;
-
-      if (swStartY < 0 || millis() - swAt > 700) { swStartY = t.y; swLastY = t.y; }
-      swAt = millis();
-
-      bool fromTop = (swStartY <= STATUS_H + 26);
-      int  down    = t.y - swStartY;
-      int  up      = swStartY - t.y;
-
-      if (fromTop && down > 55) {              /* потянул вниз от верха */
-        swStartY = -1;
-        if (!shadeOpen) openShade();
-        continue;
-      }
-      if (fromTop && up > 55) {                /* потянул вверх от верха */
-        swStartY = -1;
-        if (shadeOpen) closeShade();
-        continue;
-      }
-      swLastY = t.y;                            /* обычное нажатие — отдаём экрану */
-
+      /* шторка открывается ТОЛЬКО кнопкой в правом верхнем углу */
       if (!shadeOpen && shadeHandleHit(t)) { openShade(); continue; }
 
       if (curScreen && curScreen->touch) curScreen->touch(t);
