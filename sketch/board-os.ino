@@ -30,7 +30,7 @@
 
 /* Версия и канал управления. Меняется при каждой пересборке —
    по ней сразу видно, прошита ли новая прошивка. */
-static const char *OS_VER = "13.8";
+static const char *OS_VER = "13.9";
 #if USE_USB_DISPLAY
 static const char *OS_CH = "USB";
 #else
@@ -1482,23 +1482,30 @@ static void usbCommands() {
       t.y = b[2] | (b[3] << 8);
       t.ok = true;
 
-      /* откуда началось движение — чтобы отличить свайп от нажатия */
-      static int  prevY = -1, startY = -1;
-      static uint32_t prevAt = 0;
+      /* свайп открывает шторку ТОЛЬКО от верхней кромки — как на телефоне.
+         Любое другое движение считается обычным нажатием. */
+      static int  swStartY = -1, swLastY = -1;
+      static uint32_t swAt = 0;
 
-      if (prevY >= 0 && millis() - prevAt < 900 && abs(t.y - prevY) > 24) {
-        int from = (startY >= 0) ? startY : prevY;
-        prevY = -1; startY = -1;
-        if (t.y > from) { if (!shadeOpen) openShade(); }     /* вниз — открыть */
-        else            { if (shadeOpen) closeShade(); }      /* вверх — закрыть */
+      if (swStartY < 0 || millis() - swAt > 700) { swStartY = t.y; swLastY = t.y; }
+      swAt = millis();
+
+      bool fromTop = (swStartY <= STATUS_H + 26);
+      int  down    = t.y - swStartY;
+      int  up      = swStartY - t.y;
+
+      if (fromTop && down > 55) {              /* потянул вниз от верха */
+        swStartY = -1;
+        if (!shadeOpen) openShade();
         continue;
       }
+      if (fromTop && up > 55) {                /* потянул вверх от верха */
+        swStartY = -1;
+        if (shadeOpen) closeShade();
+        continue;
+      }
+      swLastY = t.y;                            /* обычное нажатие — отдаём экрану */
 
-      /* повторная точка почти на месте — это продолжение того же нажатия */
-      if (prevY < 0 || millis() - prevAt > 900 || abs(t.y - prevY) > 12) startY = t.y;
-      prevY = t.y; prevAt = millis();
-
-      /* кнопка быстрых настроек в правом верхнем углу */
       if (!shadeOpen && shadeHandleHit(t)) { openShade(); continue; }
 
       if (curScreen && curScreen->touch) curScreen->touch(t);
