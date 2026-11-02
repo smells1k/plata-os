@@ -12,7 +12,7 @@
 #define TFT_BL   32      /* подсветка экрана */
 
 #define LOAD_GLCD
-#define SPI_FREQUENCY       40000000
-#define SPI_READ_FREQUENCY  20000000
+#define SPI_FREQUENCY       10000000
+#define SPI_READ_FREQUENCY   8000000
 
 #define TOUCH_CS 33

@@ -30,7 +30,7 @@
 
 /* Версия и канал управления. Меняется при каждой пересборке —
    по ней сразу видно, прошита ли новая прошивка. */
-static const char *OS_VER = "16.2";
+static const char *OS_VER = "16.3";
 #if USE_USB_DISPLAY
 static const char *OS_CH = "USB";
 #else
@@ -1408,6 +1408,17 @@ void setup() {
   blSet(blPwm);
 
 #if !USE_USB_DISPLAY
+  /* ── экран ──
+     1) сброс руками: без него контроллер часто остаётся «в белом»
+     2) скорость SPI снижена: на длинных проводах 40 МГц не проходит */
+  pinMode(TFT_RST, OUTPUT);
+  digitalWrite(TFT_RST, HIGH);
+  delay(10);
+  digitalWrite(TFT_RST, LOW);
+  delay(30);
+  digitalWrite(TFT_RST, HIGH);
+  delay(150);
+
   tft.init();
   tft.setRotation(0);
   tft.fillScreen(C_BG);
