@@ -30,7 +30,7 @@
 
 /* Версия и канал управления. Меняется при каждой пересборке —
    по ней сразу видно, прошита ли новая прошивка. */
-static const char *OS_VER = "16.0";
+static const char *OS_VER = "16.1";
 #if USE_USB_DISPLAY
 static const char *OS_CH = "USB";
 #else
@@ -152,7 +152,6 @@ void otaStart() {
   started = true;
   otaOn = true;
 
-  otaSrv.on("/", HTTP_GET, []() { otaSrv.send(200, "text/html; charset=utf-8", otaPage()); });
 
   otaSrv.on("/update", HTTP_POST,
     []() {                                   /* финал */
