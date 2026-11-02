@@ -30,7 +30,7 @@
 
 /* Версия и канал управления. Меняется при каждой пересборке —
    по ней сразу видно, прошита ли новая прошивка. */
-static const char *OS_VER = "14.3";
+static const char *OS_VER = "15.0";
 #if USE_USB_DISPLAY
 static const char *OS_CH = "USB";
 #else
@@ -405,6 +405,11 @@ void drawNote();      void noteTouch(TouchPt);
 void drawLog();       void logTouch(TouchPt);
 void drawLock();      void lockTouch(TouchPt);  void lockNow();
 void logAdd(const char *what);  void logSave();  void logLoad();
+void drawPower();     void powerTouch(TouchPt);  void powerMenu();
+void drawUser();      void userTouch(TouchPt);
+void cfgSaveUser();   void cfgLoadUser();  bool askPassword();
+extern int g_pwY[3];
+uint8_t uAva();  String uName();
 void openShade();     void closeShade();
 void swipeHint(int x, int y);   bool swipeDone();
 bool otaCheck(bool quiet);  bool otaInstall();
@@ -442,6 +447,8 @@ Screen SCR_CAL    = { "калибр",  drawCalibScreen, calTouch };
 Screen SCR_NOTE   = { "заметка", drawNote,     noteTouch };
 Screen SCR_LOG    = { "журнал",  drawLog,      logTouch };
 Screen SCR_LOCK   = { "блокир",  drawLock,     lockTouch };
+Screen SCR_POWER  = { "питание", drawPower,    powerTouch };
+Screen SCR_USER   = { "учётка",  drawUser,     userTouch };
 Screen SCR_SHADE  = { "шторка",  drawShade,    shadeTouch };
 Screen SCR_TORCH  = { "фонарь",  drawTorch,    torchTouch };
 Screen SCR_SYS    = { "система", drawSys,      sysTouch };
@@ -1493,7 +1500,10 @@ void setup() {
 
   ledApply();
   logLoad();
+  cfgLoadUser();
   logAdd("включилась");
+  /* пароль на вход — если задан в учётной записи */
+  askPassword();
   go(&SCR_LAUNCH);
 }
 
@@ -1574,10 +1584,13 @@ void loop() {
     static bool btnWas = false, scrOff = false;
     bool down = (digitalRead(BTN_PIN) == LOW);
     if (down && !btnWas) btnAt = millis();
-    if (down && millis() - btnAt > 5000 && !scrOff) {
+    if (down && !scrOff && millis() - btnAt > 5000) {
       scrOff = true;
-      lockNow();                        /* как на телефоне: экран блокировки */
+      lockNow();                        /* 5 секунд — блокировка */
       logAdd("заблокировано");
+    } else if (down && !scrOff && millis() - btnAt > 2000) {
+      scrOff = true;
+      powerMenu();                      /* 2 секунды — меню питания */
     }
     if (!down) scrOff = false;
     btnWas = down;

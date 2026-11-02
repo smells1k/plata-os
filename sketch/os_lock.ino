@@ -26,9 +26,18 @@ void drawLock() {
              t.tm_wday == 3 ? "ср" : t.tm_wday == 4 ? "чт" : t.tm_wday == 5 ? "пт" : "сб");
   }
 
-  /* часы крупно */
-  tft.bigText(SCR_W / 2, 78, C_WHITE, 46, hhmm, 1);
-  textCenter(140, dt, F_MD, C_DIM);
+  /* часы ровно по центру — своим шрифтом, ширина считается сама */
+  textCenter(78, hhmm, F_LG, C_WHITE);
+  textCenter(146, dt, F_MD, C_DIM);
+
+  /* погода рядом с датой */
+  if (weatherT != "—") {
+    box(20, 170, SCR_W - 40, 26, C_PANEL, C_LINE, 8);
+    textDraw(30, 176, weatherT.c_str(), F_MD, C_ACC);
+    if (weatherC.length())
+      textDraw(30 + textW(weatherT.c_str(), F_MD) + 10, 178,
+               textClip(weatherC, 120, F_SM).c_str(), F_SM, C_DIM);
+  }
 
   /* строка уведомлений */
   const char *note = "всё спокойно";
@@ -37,17 +46,17 @@ void drawLock() {
   else if (updNew) { note = "есть обновление"; ncol = C_OK; }
   else if (pcMuted) { note = "звук на ПК выключен"; ncol = C_DIM; }
 
-  box(16, 186, SCR_W - 32, 30, C_PANEL, C_LINE, 8);
-  tft.fillCircle(30, 201, 4, ncol);
-  textDraw(42, 194, note, F_SM, ncol);
+  box(16, 204, SCR_W - 32, 30, C_PANEL, C_LINE, 8);
+  tft.fillCircle(30, 219, 4, ncol);
+  textDraw(42, 212, note, F_SM, ncol);
 
   /* подсказка снизу */
   textCenter(SCR_H - 54, "коснись экрана", F_MD, C_TXT);
   textCenter(SCR_H - 32, "или зажми D4", F_SM, C_DIM);
 
-  /* маленькая плата-иконка */
-  tft.drawRoundRect(SCR_W / 2 - 14, 240, 28, 18, 3, C_LINE);
-  tft.fillRect(SCR_W / 2 - 4, 246, 8, 6, C_ACC);
+  /* аватарка пользователя */
+  if (uAva() || uName().length()) avaDraw(SCR_W / 2, 262, 20, uAva());
+  if (uName().length()) textCenter(292, uName().c_str(), F_SM, C_DIM);
 }
 
 void lockTouch(TouchPt t) {
