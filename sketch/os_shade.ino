@@ -104,12 +104,16 @@ void drawShade() {
   shBright = y + 22; y += 50;
 
   /* ── громкость ПК ── */
-  box(8, y, SCR_W - 16, 44, C_PANEL, C_LINE, 6);
+  box(8, y, SCR_W - 16, 58, C_PANEL, C_LINE, 6);
   textDraw(16, y + 4, "ГРОМКОСТЬ ПК", F_SM, C_DIM);
-  textRight(SCR_W - 16, y + 4, pcMuted ? "выкл" : (String(pcVol) + "%").c_str(),
+  textRight(SCR_W - 16, y + 4, pcMuted ? "без звука" : (String(pcVol) + "%").c_str(),
             F_SM, pcMuted ? C_ERR : C_TXT);
-  barDraw(16, y + 24, SCR_W - 32, 14, pcVol, pcMuted ? C_ERR : C_ACC);
-  shVol = y + 22; y += 50;
+  /* три кнопки: тише, громче, без звука */
+  btnDraw(14, y + 24, 66, 26, "− 5",   C_PANEL2, C_TXT, F_MD);
+  btnDraw(87, y + 24, 66, 26, "+ 5",   C_PANEL2, C_TXT, F_MD);
+  btnDraw(160, y + 24, 66, 26, pcMuted ? "звук" : "мут",
+          pcMuted ? C_ERR : C_PANEL2, C_TXT, F_SM);
+  shVol = y + 24; y += 64;
 
   /* ── уведомления ── */
   textDraw(10, y, "УВЕДОМЛЕНИЯ", F_SM, C_DIM);
@@ -153,9 +157,11 @@ void shadeTouch(TouchPt t) {
     return;
   }
 
-  /* громкость ПК */
-  if (t.y >= shVol && t.y < shVol + 20) {
-    pcCmd("vol_up");
+  /* громкость ПК: тише / громче / без звука */
+  if (t.y >= shVol && t.y < shVol + 26) {
+    if (t.x < 87)       { pcDo("vol_down"); pcVol = max(0, pcVol - 5); }
+    else if (t.x < 160) { pcDo("vol_up");   pcVol = min(100, pcVol + 5); }
+    else                { pcDo("mute");     pcMuted = !pcMuted; }
     drawShade();
     return;
   }
