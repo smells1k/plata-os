@@ -30,7 +30,7 @@
 
 /* Версия и канал управления. Меняется при каждой пересборке —
    по ней сразу видно, прошита ли новая прошивка. */
-static const char *OS_VER = "15.3";
+static const char *OS_VER = "15.4";
 #if USE_USB_DISPLAY
 static const char *OS_CH = "USB";
 #else
@@ -410,6 +410,7 @@ void drawLock();      void lockTouch(TouchPt);  void lockNow();
 void logAdd(const char *what);  void logSave();  void logLoad();
 void drawPower();     void powerTouch(TouchPt);  void powerMenu();
 void drawUser();      void userTouch(TouchPt);
+void drawBrowser();   void browserTouch(TouchPt);  void brOpen();
 void cfgSaveUser();   void cfgLoadUser();  bool askPassword();
 extern int g_pwY[3];
 uint8_t uAva();  String uName();
@@ -452,6 +453,7 @@ Screen SCR_LOG    = { "журнал",  drawLog,      logTouch };
 Screen SCR_LOCK   = { "блокир",  drawLock,     lockTouch };
 Screen SCR_POWER  = { "питание", drawPower,    powerTouch };
 Screen SCR_USER   = { "учётка",  drawUser,     userTouch };
+Screen SCR_BR     = { "браузер", drawBrowser,  browserTouch };
 Screen SCR_SHADE  = { "шторка",  drawShade,    shadeTouch };
 Screen SCR_TORCH  = { "фонарь",  drawTorch,    torchTouch };
 Screen SCR_SYS    = { "система", drawSys,      sysTouch };

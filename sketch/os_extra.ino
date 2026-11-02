@@ -80,7 +80,7 @@ void setTouch(TouchPt t) {
 }
 
 /* ══════════ ДОПОЛНИТЕЛЬНО (список с прокруткой) ══════════ */
-#define MORE_ITEMS 6
+#define MORE_ITEMS 7
 #define MORE_TOP   50
 #define MORE_STEP  33
 #define MORE_H     (SCR_H)   /* всё влезает, прокрутка не нужна */  /* + кнопка НАЗАД */
@@ -95,9 +95,10 @@ void drawMore() {
     "Обновить время",
     "Журнал событий",
     "Учётная запись",
+    "Браузер",
   };
   uint16_t acc[MORE_ITEMS] = { 0x2D7F, 0x6B4D,
-                               0xE8A4, 0x3666, 0x2D7F, 0xC986 };
+                               0xE8A4, 0x3666, 0x2D7F, 0xC986, 0x3666 };
 
   for (int i = 0; i < MORE_ITEMS; i++) {
     int y = MORE_TOP + i * MORE_STEP;
@@ -133,6 +134,7 @@ void moreTouch(TouchPt t) {
     } break;
     case 4: go(&SCR_LOG); break;
     case 5: go(&SCR_USER); break;
+    case 6: go(&SCR_BR);   break;
     default: go(&SCR_LAUNCH); break;
   }
 }
