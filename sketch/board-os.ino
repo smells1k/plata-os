@@ -30,7 +30,7 @@
 
 /* Версия и канал управления. Меняется при каждой пересборке —
    по ней сразу видно, прошита ли новая прошивка. */
-static const char *OS_VER = "16.5";
+static const char *OS_VER = "16.6";
 /* CS экрана = D2, DC = D4 (см. User_Setup.h) */
 #if USE_USB_DISPLAY
 static const char *OS_CH = "USB";
@@ -40,13 +40,13 @@ static const char *OS_CH = "TFT";
 Preferences cfg;
 
 /* ══════════ ПИНЫ ══════════ */
-#define PIN_TFT_CS    22
+#define PIN_TFT_CS    2
 #define PIN_TFT_DC    2
 #define PIN_TFT_RST   4
 /* подсветка экрана подключена на 3V3 и горит всегда — пином не управляется */
 #define PIN_BL       -1
 #define PIN_TOUCH_CS  33
-#define RGB_PIN       21
+#define RGB_PIN       5
 #define BTN_PIN       27
 
 /* тач только по CS: T_IRQ подключать не обязательно — плата опрашивает шину */

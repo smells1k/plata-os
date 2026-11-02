@@ -7,7 +7,7 @@
 #define TFT_MOSI 23
 #define TFT_SCLK 18
 #define TFT_CS   2       /* CS экрана  (D2) */
-#define TFT_DC   4       /* DC экрана  (D4) */
+#define TFT_DC   13      /* DC экрана  (D13) — D9 занят флеш-памятью, нельзя */
 #define TFT_RST  -1      /* RESET не подключён — сброс по питанию */
 /* TFT_BL не задан: подсветка на 3V3 */
 
