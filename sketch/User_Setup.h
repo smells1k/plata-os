@@ -6,10 +6,10 @@
 #define TFT_MISO -1
 #define TFT_MOSI 23
 #define TFT_SCLK 18
-#define TFT_CS   15
-#define TFT_DC   2
-#define TFT_RST  4
-#define TFT_BL   32      /* подсветка экрана */
+#define TFT_CS   2       /* CS экрана  (D2) */
+#define TFT_DC   4       /* DC экрана  (D4) */
+#define TFT_RST  -1      /* RESET не подключён — сброс по питанию */
+/* TFT_BL не задан: подсветка на 3V3 */
 
 #define LOAD_GLCD
 #define SPI_FREQUENCY       10000000

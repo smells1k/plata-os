@@ -30,7 +30,8 @@
 
 /* Версия и канал управления. Меняется при каждой пересборке —
    по ней сразу видно, прошита ли новая прошивка. */
-static const char *OS_VER = "16.4";
+static const char *OS_VER = "16.5";
+/* CS экрана = D2, DC = D4 (см. User_Setup.h) */
 #if USE_USB_DISPLAY
 static const char *OS_CH = "USB";
 #else
@@ -39,12 +40,13 @@ static const char *OS_CH = "TFT";
 Preferences cfg;
 
 /* ══════════ ПИНЫ ══════════ */
-#define PIN_TFT_CS    15
+#define PIN_TFT_CS    22
 #define PIN_TFT_DC    2
 #define PIN_TFT_RST   4
-#define PIN_BL        32
+/* подсветка экрана подключена на 3V3 и горит всегда — пином не управляется */
+#define PIN_BL       -1
 #define PIN_TOUCH_CS  33
-#define RGB_PIN       5
+#define RGB_PIN       21
 #define BTN_PIN       27
 
 /* тач только по CS: T_IRQ подключать не обязательно — плата опрашивает шину */
@@ -216,7 +218,7 @@ void otaTick() {
 }
 
 /* ══════════ ПОДСВЕТКА ══════════ */
-static void blSet(uint8_t v) { blPwm = v; ledcWrite(PIN_BL, v); }
+static void blSet(uint8_t v) { blPwm = v; if (PIN_BL >= 0) ledcWrite(PIN_BL, v); }
 static uint8_t scl(uint8_t v) { return (uint16_t)v * ledBri / 255; }
 static void showColor(uint8_t r, uint8_t g, uint8_t b) { neopixelWrite(RGB_PIN, scl(r), scl(g), scl(b)); }
 
@@ -1404,21 +1406,11 @@ void setup() {
 
   cfgLoad();
 
-  ledcAttach(PIN_BL, 5000, 8);
+  if (PIN_BL >= 0) ledcAttach(PIN_BL, 5000, 8);
   blSet(blPwm);
 
 #if !USE_USB_DISPLAY
-  /* ── экран ──
-     1) сброс руками: без него контроллер часто остаётся «в белом»
-     2) скорость SPI снижена: на длинных проводах 40 МГц не проходит */
-  pinMode(TFT_RST, OUTPUT);
-  digitalWrite(TFT_RST, HIGH);
-  delay(10);
-  digitalWrite(TFT_RST, LOW);
-  delay(30);
-  digitalWrite(TFT_RST, HIGH);
-  delay(150);
-
+  /* ── экран ── RESET не подключён, сброс при подаче питания */
   tft.init();
   tft.setRotation(0);
   tft.fillScreen(C_BG);
