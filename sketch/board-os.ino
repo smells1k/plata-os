@@ -30,7 +30,7 @@
 
 /* Версия и канал управления. Меняется при каждой пересборке —
    по ней сразу видно, прошита ли новая прошивка. */
-static const char *OS_VER = "15.0";
+static const char *OS_VER = "15.1";
 #if USE_USB_DISPLAY
 static const char *OS_CH = "USB";
 #else
