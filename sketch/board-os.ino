@@ -30,7 +30,7 @@
 
 /* Версия и канал управления. Меняется при каждой пересборке —
    по ней сразу видно, прошита ли новая прошивка. */
-static const char *OS_VER = "14.0";
+static const char *OS_VER = "14.1";
 #if USE_USB_DISPLAY
 static const char *OS_CH = "USB";
 #else
@@ -335,6 +335,9 @@ void drawUpd();       void updTouch(TouchPt);
 void drawShade();     void shadeTouch(TouchPt);
 void drawCalibScreen(); void calTouch(TouchPt); void calibTick();
 void drawNote();      void noteTouch(TouchPt);
+void drawLog();       void logTouch(TouchPt);
+void drawLock();      void lockTouch(TouchPt);  void lockNow();
+void logAdd(const char *what);  void logSave();  void logLoad();
 void openShade();     void closeShade();
 void swipeHint(int x, int y);   bool swipeDone();
 bool otaCheck(bool quiet);  bool otaInstall();
@@ -370,6 +373,8 @@ Screen SCR_MORE   = { "доп",     drawMore,     moreTouch };
 Screen SCR_UPD    = { "обновл",  drawUpd,      updTouch };
 Screen SCR_CAL    = { "калибр",  drawCalibScreen, calTouch };
 Screen SCR_NOTE   = { "заметка", drawNote,     noteTouch };
+Screen SCR_LOG    = { "журнал",  drawLog,      logTouch };
+Screen SCR_LOCK   = { "блокир",  drawLock,     lockTouch };
 Screen SCR_SHADE  = { "шторка",  drawShade,    shadeTouch };
 Screen SCR_TORCH  = { "фонарь",  drawTorch,    torchTouch };
 Screen SCR_SYS    = { "система", drawSys,      sysTouch };
@@ -1420,6 +1425,8 @@ void setup() {
 #endif
 
   ledApply();
+  logLoad();
+  logAdd("включилась");
   go(&SCR_LAUNCH);
 }
 
@@ -1524,16 +1531,11 @@ void loop() {
     bool down = (digitalRead(BTN_PIN) == LOW);
     if (down && !btnWas) btnAt = millis();
     if (down && millis() - btnAt > 5000 && !scrOff) {
-      blSet(1);
-      tft.fillScreen(C_BG);
       scrOff = true;
+      lockNow();                        /* как на телефоне: экран блокировки */
+      logAdd("заблокировано");
     }
-    if (down && scrOff && millis() - btnAt > 5400) {
-      blSet(blPwm);
-      scrOff = false;
-      btnAt = millis();
-      go(curScreen ? curScreen : &SCR_LAUNCH);
-    }
+    if (!down) scrOff = false;
     btnWas = down;
   }
 

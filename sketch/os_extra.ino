@@ -80,9 +80,9 @@ void setTouch(TouchPt t) {
 }
 
 /* ══════════ ДОПОЛНИТЕЛЬНО (список с прокруткой) ══════════ */
-#define MORE_ITEMS 6
-#define MORE_TOP   52
-#define MORE_STEP  30
+#define MORE_ITEMS 7
+#define MORE_TOP   50
+#define MORE_STEP  33
 #define MORE_H     (SCR_H)   /* всё влезает, прокрутка не нужна */  /* + кнопка НАЗАД */
 
 void drawMore() {
@@ -95,16 +95,17 @@ void drawMore() {
     "Перезагрузить",
     "Система",
     "Обновить время",
+    "Журнал событий",
   };
   uint16_t acc[MORE_ITEMS] = { 0xFBE0, 0x2D7F, 0x6B4D,
-                               0xE8A4, 0x8010, 0x3666 };
+                               0xE8A4, 0x8010, 0x3666, 0x2D7F };
 
   for (int i = 0; i < MORE_ITEMS; i++) {
     int y = MORE_TOP + i * MORE_STEP;
-    box(10, y, SCR_W - 20, 26, C_PANEL, C_LINE, 6);
-    tft.fillCircle(22, y + 13, 3, acc[i]);
-    textDraw(32, y + 6, items[i], F_SM, C_TXT);
-    textRight(SCR_W - 18, y + 6, "›", F_SM, C_DIM);
+    box(10, y, SCR_W - 20, 29, C_PANEL, C_LINE, 6);
+    tft.fillCircle(22, y + 14, 3, acc[i]);
+    textDraw(32, y + 8, items[i], F_SM, C_TXT);
+    textRight(SCR_W - 18, y + 8, "›", F_SM, C_DIM);
   }
 }
 
@@ -133,6 +134,7 @@ void moreTouch(TouchPt t) {
       delay(1400);
       go(&SCR_MORE);
     } break;
+    case 6: go(&SCR_LOG); break;
     default: go(&SCR_LAUNCH); break;
   }
 }
