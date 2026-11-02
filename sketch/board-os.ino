@@ -30,7 +30,7 @@
 
 /* Версия и канал управления. Меняется при каждой пересборке —
    по ней сразу видно, прошита ли новая прошивка. */
-static const char *OS_VER = "16.6";
+static const char *OS_VER = "16.7";
 /* CS экрана = D2, DC = D4 (см. User_Setup.h) */
 #if USE_USB_DISPLAY
 static const char *OS_CH = "USB";
@@ -45,12 +45,13 @@ Preferences cfg;
 #define PIN_TFT_RST   4
 /* подсветка экрана подключена на 3V3 и горит всегда — пином не управляется */
 #define PIN_BL       -1
-#define PIN_TOUCH_CS  33
+/* тач переехал на D5 (33 на его плате нет) */
+#define PIN_TOUCH_CS  5
 #define RGB_PIN       5
 #define BTN_PIN       27
 
 /* тач только по CS: T_IRQ подключать не обязательно — плата опрашивает шину */
-XPT2046_Touchscreen ts(PIN_TOUCH_CS);
+XPT2046_Touchscreen ts(5);   /* XPT2046 требует номер константой */
 
 int T_RAW_X0 = 300, T_RAW_X1 = 3800, T_RAW_Y0 = 300, T_RAW_Y1 = 3800;
 
@@ -1410,12 +1411,16 @@ void setup() {
   blSet(blPwm);
 
 #if !USE_USB_DISPLAY
-  /* ── экран ── RESET не подключён, сброс при подаче питания */
+  /* ── экран ── RESET сидит на EN: сбрасывается вместе с платой.
+     двойная инициализация страхует контроллер после подачи питания */
+  tft.init();
+  delay(120);
   tft.init();
   tft.setRotation(0);
   tft.fillScreen(C_BG);
 
-  SPI.begin(18, 19, 23, PIN_TOUCH_CS);
+  /* SCK=3 · MISO=5 · MOSI=12 — свои ножки, MISO не используем */
+  SPI.begin(3, -1, 12, -1);
   ts.begin();
   ts.setRotation(0);
 #endif
