@@ -30,7 +30,7 @@
 
 /* Версия и канал управления. Меняется при каждой пересборке —
    по ней сразу видно, прошита ли новая прошивка. */
-static const char *OS_VER = "16.1";
+static const char *OS_VER = "16.2";
 #if USE_USB_DISPLAY
 static const char *OS_CH = "USB";
 #else
@@ -885,7 +885,7 @@ void drawPC() {
   textDraw(28, 56, (pcHost.length() ? "по проводу · " + pcHost : String("по проводу")).c_str(),
            F_SM, C_OK);
 #else
-  textDraw(28, 53, "сеть · " + pcIp, F_SM, pcStatusCol);
+  textDraw(28, 53, (String("сеть · ") + pcIp).c_str(), F_SM, pcStatusCol);
 #endif
 
   /* ── громкость ── */
@@ -1460,20 +1460,13 @@ void setup() {
 
 uint32_t lastUi = 0;
 
-#if USE_USB_DISPLAY
-/* команды от окна на компьютере */
-#if USE_USB_DISPLAY
 /* ── команды компьютеру по проводу ──
    Плата шлёт по USB: 'P' + длина + имя команды ("lock", "shutdown"…).
    Окно на ПК их выполняет — сеть не нужна вообще. */
-void pcCmdUsb(const char *cmd) {
-  size_t n = strlen(cmd);
-  if (n > 32) n = 32;
-  Serial.write('P');
-  Serial.write((uint8_t)n);
-  for (size_t i = 0; i < n; i++) Serial.write((uint8_t)cmd[i]);
-}
-#endif
+#include "os_usb.h"
+
+#if USE_USB_DISPLAY
+/* команды от окна на компьютере */
 
 static void usbCommands() {
   while (Serial.available()) {

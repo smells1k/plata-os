@@ -132,7 +132,14 @@ public:
 
 USBTFT tft;
 #else
-TFT_eSPI tft = TFT_eSPI();
+/* обёртка: у настоящего TFT нет «партий» и прокрутки — делаем вид, что есть */
+class TFTShim : public TFT_eSPI {
+public:
+  void beginBatch() {}
+  void endBatch() {}
+  void scrollH(uint16_t) {}
+};
+TFTShim tft;
 #endif
 
 static bool g_dirty = true;
