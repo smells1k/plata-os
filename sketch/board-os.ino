@@ -30,7 +30,7 @@
 
 /* Версия и канал управления. Меняется при каждой пересборке —
    по ней сразу видно, прошита ли новая прошивка. */
-static const char *OS_VER = "14.2";
+static const char *OS_VER = "14.3";
 #if USE_USB_DISPLAY
 static const char *OS_CH = "USB";
 #else
@@ -101,6 +101,9 @@ void navLauncher();          /* вернуться на рабочий стол 
 static bool pcCmd(const char *cmd, String *out = nullptr);
 static inline void pcDo(const char *cmd) { pcCmd(cmd, nullptr); }
 void sendWol();
+extern int    pcVol;        /* громкость ПК — заданы ниже, нужны веб-пульту */
+extern bool   pcMuted;
+extern String pcHost;
 
 #if HAVE_OTA
 static WebServer  otaSrv(80);
@@ -194,50 +197,114 @@ void otaStart() {
       }
     });
 
-  /* ── пульт для телефона: открывается страница самой платы ── */
-  otaSrv.on("/pult", HTTP_GET, []() {
-    String h = "<!doctype html><meta charset=utf-8>";
-    h += "<meta name=viewport content='width=device-width,initial-scale=1'>";
-    h += "<title>ПЛАТА-ОС</title>";
-    h += "<style>body{margin:0;background:#0d1117;color:#e6edf3;"
-         "font:15px system-ui,sans-serif;padding:14px;max-width:520px;margin:0 auto}"
-         "h1{font-size:17px;margin:0 0 4px}.v{color:#8b949e;font-size:12px;margin-bottom:14px}"
-         ".g{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}"
-         "a{display:block;padding:15px;border-radius:10px;background:#161b22;"
-         "border:1px solid #30363d;color:#e6edf3;text-decoration:none;"
-         "text-align:center;font-weight:600;font-size:13px}"
-         "a:active{background:#30363d}.r{background:#2d1215;border-color:#8b2c33;color:#ffb3b8}"
-         "</style>";
-    h += "<h1>ПЛАТА-ОС</h1><div class=v>" + String(OS_VER) + " · " +
-         (wifiOk ? boardIp : String("нет сети")) + "</div>";
-    h += "<div class=g><a href='/p/on'>Разбудить ПК</a><a href='/p/lock'>Блокировка</a>"
-         "<a href='/p/sleep'>Сон</a><a href='/p/shutdown' class=r>Выключить</a>"
-         "<a href='/p/reboot' class=r>Перезагрузить</a><a href='/p/mute'>Без звука</a>"
-         "<a href='/p/vol_down'>Тише</a><a href='/p/vol_up'>Громче</a></div>";
-    h += "<div class=g><a href='/p/led'>Диод вкл/выкл</a><a href='/p/screen'>Экран вкл/выкл</a></div>";
-    h += "<p style='color:#8b949e;font-size:12px'>Домашняя сеть. Ничего наружу не открыто.</p>";
+  /* ── пульт для телефона: сразу на главной, без переходов ── */
+  otaSrv.on("/", HTTP_GET, []() {
+    String h = "<!doctype html><html lang=ru><head><meta charset=utf-8>";
+    h += "<meta name=viewport content='width=device-width,initial-scale=1,viewport-fit=cover'>";
+    h += "<title>ПЛАТА-ОС</title><style>";
+    h += "*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}";
+    h += "body{margin:0;background:#0b0f14;color:#e6edf3;font:16px -apple-system,system-ui,sans-serif;";
+    h += "padding:16px 14px 28px;max-width:520px;margin:0 auto}";
+    h += "h1{font-size:19px;margin:0 0 2px;display:flex;align-items:center;gap:8px}";
+    h += ".dot{width:9px;height:9px;border-radius:50%;background:#3fb950;box-shadow:0 0 8px #3fb950}";
+    h += ".sub{color:#8b949e;font-size:12.5px;margin-bottom:16px}";
+    h += ".g{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:9px}";
+    h += "button{all:unset;display:flex;flex-direction:column;justify-content:center;align-items:center;";
+    h += "padding:17px 8px;border-radius:14px;background:#161b22;border:1px solid #262d36;";
+    h += "font-weight:600;font-size:14px;text-align:center;cursor:pointer;transition:.12s}";
+    h += "button:active{background:#243040;transform:scale(.97)}";
+    h += ".red{background:#2a1215;border-color:#5c2229;color:#ffb3b8}";
+    h += ".wide{grid-column:1/-1}";
+    h += ".st{margin-top:14px;padding:12px 14px;border-radius:12px;background:#11161d;";
+    h += "border:1px solid #1f2630;font-size:13px;color:#8b949e;min-height:44px}";
+    h += ".st b{color:#e6edf3;font-weight:600}";
+    h += ".bar{display:flex;align-items:center;gap:10px;margin:14px 0 6px}";
+    h += ".track{flex:1;height:8px;border-radius:4px;background:#1c232c;overflow:hidden}";
+    h += ".fill{height:100%;width:0;background:#4a9eff;transition:width .3s}";
+    h += "</style></head><body>";
+    h += "<h1><span class=dot></span>ПЛАТА-ОС</h1>";
+    h += "<div class=sub>" + String(OS_VER) + " · " + (wifiOk ? boardIp : String("нет сети")) + "</div>";
+
+    h += "<div class=bar><div class=track><div class=fill id=vol></div></div>";
+    h += "<span id=vtx style='font-size:13px;color:#8b949e'>—</span></div>";
+
+    h += "<div class=g>";
+    h += "<button onclick=\"c('on')\">Разбудить ПК</button>";
+    h += "<button onclick=\"c('lock')\">Блокировка</button>";
+    h += "<button onclick=\"c('sleep')\">Сон</button>";
+    h += "<button onclick=\"c('mute')\">Без звука</button>";
+    h += "<button onclick=\"c('voldown')\">Тише</button>";
+    h += "<button onclick=\"c('volup')\">Громче</button>";
+    h += "<button class=red onclick=\"c('shutdown')\">Выключить</button>";
+    h += "<button class=red onclick=\"c('reboot')\">Перезагрузить</button>";
+    h += "</div>";
+    h += "<div class=g>";
+    h += "<button onclick=\"c('led')\">Диод</button>";
+    h += "<button onclick=\"c('screen')\">Экран</button>";
+    h += "</div>";
+    h += "<div class=st id=st>готов</div>";
+    h += "<script>";
+    h += "var st=document.getElementById('st');";
+    h += "function c(k){st.textContent='…';";
+    h += "fetch('/c/'+k,{cache:'no-store'}).then(function(r){return r.text()})";
+    h += ".then(function(t){st.textContent=t;upd()})";
+    h += ".catch(function(){st.textContent='плата не отвечает'})}";
+    h += "function upd(){fetch('/c/state',{cache:'no-store'}).then(function(r){return r.text()})";
+    h += ".then(function(t){var p=t.split(' ');";
+    h += "document.getElementById('vol').style.width=p[0]+'%';";
+    h += "document.getElementById('vtx').textContent=(p[1]=='1'?'без звука':p[0]+'%');";
+    h += "}).catch(function(){})}";
+    h += "upd();setInterval(upd,4000);";
+    h += "</script></body></html>";
     otaSrv.send(200, "text/html; charset=utf-8", h);
   });
 
-  otaSrv.on("/p/on", HTTP_GET, []() { sendWol(); otaSrv.send(200, "text/plain; charset=utf-8", "пакет ушёл"); });
-  otaSrv.on("/p/lock", HTTP_GET, []() { pcDo("lock"); otaSrv.send(200, "text/plain; charset=utf-8", "блокирую"); });
-  otaSrv.on("/p/sleep", HTTP_GET, []() { pcDo("sleep"); otaSrv.send(200, "text/plain; charset=utf-8", "в сон"); });
-  otaSrv.on("/p/shutdown", HTTP_GET, []() { pcDo("shutdown"); otaSrv.send(200, "text/plain; charset=utf-8", "выключаю"); });
-  otaSrv.on("/p/reboot", HTTP_GET, []() { pcDo("reboot"); otaSrv.send(200, "text/plain; charset=utf-8", "перезагружаю"); });
-  otaSrv.on("/p/mute", HTTP_GET, []() { pcDo("mute"); otaSrv.send(200, "text/plain; charset=utf-8", "звук"); });
-  otaSrv.on("/p/vol_up", HTTP_GET, []() { pcDo("vol_up"); otaSrv.send(200, "text/plain; charset=utf-8", "громче"); });
-  otaSrv.on("/p/vol_down", HTTP_GET, []() { pcDo("vol_down"); otaSrv.send(200, "text/plain; charset=utf-8", "тише"); });
-  otaSrv.on("/p/led", HTTP_GET, []() {
+  /* прошивка файлом — отдельная страница, пульту не мешает */
+  otaSrv.on("/ota", HTTP_GET, []() {
+    String h = "<!doctype html><meta charset=utf-8>";
+    h += "<meta name=viewport content='width=device-width,initial-scale=1'>";
+    h += "<style>body{background:#0b0f14;color:#e6edf3;font:16px system-ui;";
+    h += "text-align:center;padding:40px 20px}input{margin:24px 0}</style>";
+    h += "<h2>ПЛАТА-ОС " + String(OS_VER) + "</h2>";
+    h += "<p>Выбери ПЛАТА-ОС.bin (тот же, что для кабеля)</p>";
+    h += "<form method=POST action=/update enctype=multipart/form-data>";
+    h += "<input type=file name=f><br><input type=submit value='Прошить'></form>";
+    otaSrv.send(200, "text/html; charset=utf-8", h);
+  });
+
+  /* действия: ответ текстом, страница не перезагружается */
+  otaSrv.on("/c/on",       HTTP_GET, []() { sendWol(); otaSrv.send(200, "text/plain; charset=utf-8", "пакет отправлен — ПК просыпается"); });
+  otaSrv.on("/c/lock",     HTTP_GET, []() { pcDo("lock");     otaSrv.send(200, "text/plain; charset=utf-8", "ПК заблокирован"); });
+  otaSrv.on("/c/sleep",    HTTP_GET, []() { pcDo("sleep");    otaSrv.send(200, "text/plain; charset=utf-8", "ПК уходит в сон"); });
+  otaSrv.on("/c/shutdown", HTTP_GET, []() { pcDo("shutdown"); otaSrv.send(200, "text/plain; charset=utf-8", "ПК выключается"); });
+  otaSrv.on("/c/reboot",   HTTP_GET, []() { pcDo("reboot");   otaSrv.send(200, "text/plain; charset=utf-8", "ПК перезагружается"); });
+  otaSrv.on("/c/mute",     HTTP_GET, []() {
+    pcDo("mute"); pcMuted = !pcMuted;
+    otaSrv.send(200, "text/plain; charset=utf-8", pcMuted ? "звук выключен" : "звук включён");
+  });
+  otaSrv.on("/c/volup",    HTTP_GET, []() {
+    pcDo("vol_up"); pcVol = min(100, pcVol + 5);
+    otaSrv.send(200, "text/plain; charset=utf-8", "громче: " + String(pcVol) + "%");
+  });
+  otaSrv.on("/c/voldown",  HTTP_GET, []() {
+    pcDo("vol_down"); pcVol = max(0, pcVol - 5);
+    otaSrv.send(200, "text/plain; charset=utf-8", "тише: " + String(pcVol) + "%");
+  });
+  otaSrv.on("/c/led",      HTTP_GET, []() {
     ledLit = !ledLit;
     if (ledLit) ledApply(); else neopixelWrite(RGB_PIN, 0, 0, 0);
     cfgSave();
     otaSrv.send(200, "text/plain; charset=utf-8", ledLit ? "диод включён" : "диод выключен");
   });
-  otaSrv.on("/p/screen", HTTP_GET, []() {
+  otaSrv.on("/c/screen",   HTTP_GET, []() {
     static bool off = false;
     off = !off;
-    if (off) { blSet(1); } else { blSet(blPwm); }
+    blSet(off ? 1 : blPwm);
     otaSrv.send(200, "text/plain; charset=utf-8", off ? "экран погашен" : "экран включён");
+  });
+  otaSrv.on("/c/state",    HTTP_GET, []() {
+    otaSrv.send(200, "text/plain; charset=utf-8",
+                String(pcVol) + " " + String(pcMuted ? 1 : 0));
   });
 
   otaSrv.begin();
