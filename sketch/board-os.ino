@@ -30,7 +30,7 @@
 
 /* Версия и канал управления. Меняется при каждой пересборке —
    по ней сразу видно, прошита ли новая прошивка. */
-static const char *OS_VER = "16.7";
+static const char *OS_VER = "16.8";
 /* CS экрана = D2, DC = D4 (см. User_Setup.h) */
 #if USE_USB_DISPLAY
 static const char *OS_CH = "USB";
@@ -40,15 +40,15 @@ static const char *OS_CH = "TFT";
 Preferences cfg;
 
 /* ══════════ ПИНЫ ══════════ */
-#define PIN_TFT_CS    2
-#define PIN_TFT_DC    2
+#define PIN_TFT_CS    21
+#define PIN_TFT_DC    22
 #define PIN_TFT_RST   4
 /* подсветка экрана подключена на 3V3 и горит всегда — пином не управляется */
 #define PIN_BL       -1
 /* тач переехал на D5 (33 на его плате нет) */
 #define PIN_TOUCH_CS  5
 #define RGB_PIN       5
-#define BTN_PIN       27
+#define BTN_PIN       3        /* D3 — кнопки на плате нет, можно повесить свою */
 
 /* тач только по CS: T_IRQ подключать не обязательно — плата опрашивает шину */
 XPT2046_Touchscreen ts(5);   /* XPT2046 требует номер константой */
@@ -1419,8 +1419,7 @@ void setup() {
   tft.setRotation(0);
   tft.fillScreen(C_BG);
 
-  /* SCK=3 · MISO=5 · MOSI=12 — свои ножки, MISO не используем */
-  SPI.begin(3, -1, 12, -1);
+  SPI.begin(18, 19, 23, -1);       /* SCK 18 · MO 23 — как подписано на плате */
   ts.begin();
   ts.setRotation(0);
 #endif
