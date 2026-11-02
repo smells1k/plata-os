@@ -5,6 +5,7 @@
 static bool locked = false;
 
 void drawLock() {
+  /* стираем ВСЁ до последнего пикселя — иначе старые надписи остаются */
   tft.fillRect(0, 0, SCR_W, SCR_H, C_BG);
 
   /* верхняя полоска с сетью */
@@ -55,6 +56,7 @@ void drawLock() {
   textCenter(SCR_H - 32, "или зажми D4", F_SM, C_DIM);
 
   /* аватарка пользователя */
+  tft.fillRect(0, 236, SCR_W, 84, C_BG);
   if (uAva() || uName().length()) avaDraw(SCR_W / 2, 262, 20, uAva());
   if (uName().length()) textCenter(292, uName().c_str(), F_SM, C_DIM);
 }

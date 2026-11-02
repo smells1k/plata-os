@@ -54,27 +54,31 @@ static void avaDraw(int cx, int cy, int r, uint8_t kind) {
 /* ── экран учётной записи ── */
 int g_usAva = 52, g_usName = 132, g_usPass = 176, g_usSave = 232;
 
+/* рамка экрана: рисуем один раз, дальше только содержимое */
+static void userBox(int y, int h) {
+  tft.fillRect(8, y, SCR_W - 16, h, C_BG);       /* сначала стереть */
+  box(8, y, SCR_W - 16, h, C_PANEL, C_LINE, 6);
+}
+
 void drawUser() {
   topBack("УЧЁТНАЯ ЗАПИСЬ", 16);
 
-  box(8, 50, SCR_W - 16, 76, C_PANEL, C_LINE, 8);
+  userBox(50, 76);
   avaDraw(44, 88, 26, userAva);
   textDraw(80, 66, userAva ? "аватарка" : "без аватарки", F_SM, C_DIM);
   textDraw(80, 86, "нажми — сменить", F_SM, C_ACC);
-  btnDraw(80, 104, 60, 16, "›", C_PANEL2, C_TXT, F_SM);
 
-  box(8, 132, SCR_W - 16, 38, C_PANEL, C_LINE, 6);
+  userBox(132, 38);
   textDraw(16, 136, "ИМЯ", F_SM, C_DIM);
   textDraw(16, 152, userName.length() ? textClip(userName, SCR_W - 36, F_SM).c_str()
                                       : "не задано", F_SM,
            userName.length() ? C_TXT : C_WARN);
 
-  box(8, 176, SCR_W - 16, 38, C_PANEL, C_LINE, 6);
-  textDraw(16, 180, "ПАРОЛЬ НА ВХОД", F_SM, C_DIM);
-  textDraw(16, 196, userPass.length() ? "••••  задан" : "нет — вход без пароля", F_SM,
-           userPass.length() ? C_OK : C_DIM);
+  userBox(176, 44);
+  textDraw(16, 182, "БЛОКИРОВКА", F_SM, C_DIM);
+  textDraw(16, 199, "D4 — 5 секунд, или кнопка Питание", F_SM, C_TXT);
 
-  btnDraw(8, 232, SCR_W - 16, 30, "СОХРАНИТЬ", C_OK, C_WHITE, F_MD);
+  btnDraw(8, 232, SCR_W - 16, 32, "СОХРАНИТЬ", C_OK, C_WHITE, F_MD);
 
   textCenter(SCR_H - 26, "аватарка рисуется на экране блокировки", F_SM, C_DIM);
 }
@@ -91,12 +95,7 @@ void userTouch(TouchPt t) {
     return;
   }
 
-  if (t.y >= 176 && t.y < 214) {
-    String b = "";
-    if (kbInput("ПАРОЛЬ", b, false, true)) userPass = b;
-    drawUser();
-    return;
-  }
+
 
   if (t.y >= 232 && t.y < 262) {
     cfgSaveUser();
@@ -125,7 +124,8 @@ void cfgLoadUser() {
 
 /* ── запрос пароля при включении ── */
 bool askPassword() {
-  if (!userPass.length()) return true;         /* пароля нет — пускаем */
+  return true;      /* вход без пароля: пароль не защищает ни от чего,
+                       экран блокировки и так закрывается D4 */
 
   tft.fillScreen(C_BG);
   textCenter(90, "ПЛАТА-ОС", F_LG, C_WHITE);

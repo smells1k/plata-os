@@ -194,21 +194,38 @@ static int     simLen = 3, simStep = 0, simLevel = 1, simBest = 0;
 static bool    simInput = false, simPlaying = false;
 static String  simOut = "нажми «Старт»";
 
+/* шесть цветов вместо трёх: легче запоминать по оттенку */
+static const uint16_t SIM_COL[6] = {
+  0xE000,   /* красный  */
+  0x0600,   /* зелёный  */
+  0x033F,   /* голубой  */
+  0xFD20,   /* оранж    */
+  0xA01F,   /* фиолет   */
+  0xFFE0    /* жёлтый   */
+};
+static const char *SIM_NM[6] = { "КРАСН", "ЗЕЛ", "ГОЛУБ", "ОРАНЖ", "ФИОЛ", "ЖЁЛТ" };
+
 void drawSimon() {
   topBack("САЙМОН", 20);
   textDraw(10, 52, simOut.c_str(), F_SM, C_WARN);
 
-  /* три кнопки-цвета */
-  static const uint16_t COL[3] = { 0xC000, 0x0340, 0x0010 };
-  for (int i = 0; i < 3; i++) {
-    int y = 80 + i * 56;
-    box(10, y, SCR_W - 20, 50, COL[i], C_LINE, 8);
-    const char *lbl = i == 0 ? "КРАСНЫЙ" : i == 1 ? "ЗЕЛЁНЫЙ" : "СИНИЙ";
-    textDraw(24, y + 18, lbl, F_MD, C_WHITE);
+  /* сетка 2 столбца × 3 ряда */
+  for (int i = 0; i < 6; i++) {
+    int x = 10 + (i % 2) * 112;
+    int y = 72 + (i / 2) * 50;
+    box(x, y, 106, 44, SIM_COL[i], C_LINE, 8);
+    textDraw(x + 10, y + 14, SIM_NM[i], F_SM, C_WHITE);
   }
-  textDraw(10, 252, (String("уровень ") + simLevel + (simBest ? String(" · рекорд ") + simBest : String(""))).c_str(), F_SM, C_DIM);
 
-  btnDraw(10, SCR_H - 38, 106, 30, "СТАРТ", C_ACC, C_WHITE, F_SM);
+  textDraw(10, 232, (String("уровень ") + simLevel +
+            (simBest ? String(" · рекорд ") + simBest : String(""))).c_str(), F_SM, C_DIM);
+  /* подсказка — что делать прямо сейчас */
+  const char *tip = simInput ? "повтори так же" : "смотри на диод";
+  textDraw(10, 250, tip, F_SM, C_ACC);
+  textDraw(10, 266, "диод мигает цветом — жми такой же", F_SM, C_DIM);
+
+  btnDraw(10, SCR_H - 34, 106, 28, "СТАРТ", C_ACC, C_WHITE, F_SM);
+  btnDraw(124, SCR_H - 34, 106, 28, "НАЗАД", C_PANEL, C_TXT, F_SM);
 }
 
 static void simonShow() {
@@ -216,13 +233,16 @@ static void simonShow() {
   simOut = "смотри…";
   go(&SCR_SIMON);
   delay(500);
-  static const uint8_t C[3][3] = { {200,0,0},{0,200,40},{0,60,220} };
+  static const uint8_t C[6][3] = {
+    {255,0,0}, {0,255,40}, {0,120,255},
+    {255,140,0}, {190,0,255}, {255,255,0}
+  };
   for (int i = 0; i < simLen; i++) {
     uint8_t c = simSeq[i];
     neopixelWrite(RGB_PIN, C[c][0], C[c][1], C[c][2]);
-    delay(400);
+    delay(420);
     neopixelWrite(RGB_PIN, 0, 0, 0);
-    delay(180);
+    delay(190);
   }
   simStep = 0;
   simInput = true;
@@ -232,7 +252,7 @@ static void simonShow() {
 
 static void simonStart() {
   simLen = 3; simLevel = 1; simStep = 0;
-  for (int i = 0; i < 16; i++) simSeq[i] = esp_random() % 3;
+  for (int i = 0; i < 16; i++) simSeq[i] = esp_random() % 6;   /* 6 цветов */
   simonShow();
 }
 
@@ -244,10 +264,16 @@ void simonTouch(TouchPt t) {
     return;
   }
   if (!simInput) return;
-  int idx = (t.y - 80) / 56;
-  if (t.y < 80 || idx < 0 || idx > 2) return;
+  if (t.y < 72 || t.y >= 72 + 3 * 50) return;
+  int col = (t.x - 10) / 112;
+  int row = (t.y - 72) / 50;
+  if (col < 0 || col > 1 || row < 0 || row > 2) return;
+  int idx = row * 2 + col;
 
-  static const uint8_t C[3][3] = { {200,0,0},{0,200,40},{0,60,220} };
+  static const uint8_t C[6][3] = {
+    {255,0,0}, {0,255,40}, {0,120,255},
+    {255,140,0}, {190,0,255}, {255,255,0}
+  };
   neopixelWrite(RGB_PIN, C[idx][0], C[idx][1], C[idx][2]);
   delay(160);
   neopixelWrite(RGB_PIN, 0, 0, 0);
