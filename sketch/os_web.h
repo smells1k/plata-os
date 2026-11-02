@@ -33,7 +33,7 @@ static String webPage() {
   h += F("border:1px solid #1f2630;font-size:12.5px;color:#8b949e;min-height:42px}");
   h += F("</style></head><body>");
   h += F("<h1><span class=dot id=dot></span>ПЛАТА-ОС</h1>");
-  h += "<div class=sub>" + String(OS_VER) + " · " +
+  h += "<div class=sub>сборка " + String(OS_VER) + " · " +
        (wifiOk ? boardIp : String("нет Wi-Fi")) + "</div>";
 
   /* ── плата ── */
@@ -74,9 +74,21 @@ static String webPage() {
   return h;
 }
 
+/* страницу отдаём с запретом кэша: телефон не должен держать старую */
+static void webSend() {
+  otaSrv.sendHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  otaSrv.sendHeader("Pragma", "no-cache");
+  otaSrv.send(200, "text/html; charset=utf-8", webPage());
+}
+
 void webSetup() {
-  otaSrv.on("/", HTTP_GET, []() {
-    otaSrv.send(200, "text/html; charset=utf-8", webPage());
+  otaSrv.on("/", HTTP_GET, []() { webSend(); });
+  otaSrv.on("/pult", HTTP_GET, []() { webSend(); });
+  otaSrv.on("/index.html", HTTP_GET, []() { webSend(); });
+  /* что бы ни ввели в адрес — откроется пульт */
+  otaSrv.onNotFound([]() {
+    if (otaSrv.method() == HTTP_GET) webSend();
+    else otaSrv.send(404, "text/plain", "нет");
   });
 
   /* прошивка файлом */
